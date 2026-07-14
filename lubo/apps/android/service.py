@@ -12,8 +12,7 @@ from lubo.core.events import EventBus, RecorderEvent
 from lubo.core.models import RecordingStatus
 from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
 from lubo.core.url_store import UrlStore
-from lubo.platforms.douyin import DouyinAdapter
-from lubo.platforms.registry import PlatformRegistry
+from lubo.platforms.factory import build_default_registry
 from lubo.recorders.http_stream import DirectHttpRecorder
 
 
@@ -56,14 +55,14 @@ def run_service(root: Path | None = None) -> None:
     targets = UrlStore(url_path, default_quality=config.quality).load()
     event_bus = EventBus()
     scheduler = RecordingScheduler(
-        registry=PlatformRegistry([DouyinAdapter()]),
+        registry=build_default_registry(),
         recorder=DirectHttpRecorder(),
         event_bus=event_bus,
         config=SchedulerConfig(
             output_dir=storage_root / "recordings",
             quality=config.quality,
             proxy_addr=config.proxy_addr if config.use_proxy else "",
-            cookies={"douyin": config.douyin_cookie},
+            cookies=dict(config.cookies),
             split_enabled=False,
             max_concurrency=min(config.max_concurrency, 2),
         ),

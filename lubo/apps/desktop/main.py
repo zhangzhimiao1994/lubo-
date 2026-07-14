@@ -29,8 +29,7 @@ from lubo.apps.desktop.runtime import resolve_ffmpeg
 from lubo.core.config import ConfigService
 from lubo.core.events import EventBus, RecorderEvent
 from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
-from lubo.platforms.douyin import DouyinAdapter
-from lubo.platforms.registry import PlatformRegistry
+from lubo.platforms.factory import build_default_registry
 from lubo.recorders.ffmpeg import FFmpegRecorder
 
 
@@ -264,7 +263,7 @@ class DesktopRoot(BoxLayout):
         self._closing = False
 
         self.url_input = TextInput(
-            hint_text=self._text("抖音直播间 URL", "Douyin live room URL"),
+            hint_text=self._text("直播间 URL", "Live room URL"),
             font_name=font_name or "Roboto",
             multiline=False,
             size_hint_y=None,
@@ -583,7 +582,7 @@ class DouyinLiveRecorderDesktopApp(App):
         config = config_service.load()
         output_dir = _prepare_output_dir(data_dir, config.save_path)
         event_bus = EventBus()
-        registry = PlatformRegistry([DouyinAdapter()])
+        registry = build_default_registry()
         recorder = FFmpegRecorder(ffmpeg_path=resolve_ffmpeg())
         self.scheduler = RecordingScheduler(
             registry=registry,
@@ -593,7 +592,7 @@ class DouyinLiveRecorderDesktopApp(App):
                 output_dir=output_dir,
                 quality=config.quality,
                 proxy_addr=config.proxy_addr if config.use_proxy else "",
-                cookies={"douyin": config.douyin_cookie},
+                cookies=dict(config.cookies),
                 output_format=config.output_format,
                 split_enabled=config.split_enabled,
                 split_seconds=config.split_seconds,

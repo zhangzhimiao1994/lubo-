@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 from lubo.core.models import RecordingTarget, StreamInfo
 from lubo.recorders.ffmpeg import RecorderOptions
+from lubo.resolvers.base import NoCompatibleStreamError
 from lubo.recorders.http_stream import (
     DirectHttpRecorder,
     HTTPStreamCommand,
     HTTPStreamRecorder,
+    UnsupportedStreamProtocolError,
 )
 
 
@@ -108,16 +110,48 @@ class HTTPStreamRecorderTests(unittest.TestCase):
         self.assertEqual(command.url, "https://pull.example/live.bin")
 
     def test_build_command_rejects_hls_without_android_ffmpeg(self):
-        recorder = HTTPStreamRecorder(opener=FakeOpener(FakeResponse()))
-        stream = self.live_stream(flv_url="")
+        self.assertTrue(
+            issubclass(UnsupportedStreamProtocolError, NoCompatibleStreamError)
+        )
 
-        with self.assertRaisesRegex(ValueError, "HLS"):
-            recorder.build_command(
-                RecordingTarget(url="https://live.douyin.com/123"),
-                stream,
-                Path("downloads"),
-                RecorderOptions(),
-            )
+    def test_hls_only_stream_is_rejected_before_output_or_network_side_effects(self):
+        opener = FakeOpener(FakeResponse())
+        recorder = HTTPStreamRecorder(opener=opener)
+        stream = self.live_stream(
+            flv_url="",
+            primary_url="https://pull.example/LIVE.M3U8?token=secret#segment",
+        )
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "missing"
+            with self.assertRaisesRegex(
+                UnsupportedStreamProtocolError,
+                "Android direct recorder.*HLS",
+            ):
+                recorder.build_command(
+                    RecordingTarget(url="https://live.douyin.com/123"),
+                    stream,
+                    output_dir,
+                    RecorderOptions(),
+                )
+
+            self.assertFalse(output_dir.exists())
+            self.assertEqual(opener.requests, [])
+
+    def test_non_hls_path_with_m3u8_query_text_remains_supported(self):
+        recorder = HTTPStreamRecorder(opener=FakeOpener(FakeResponse()))
+        stream = self.live_stream(
+            flv_url="",
+            primary_url="https://pull.example/live.flv?fallback=clip.m3u8#token",
+        )
+
+        command = recorder.build_command(
+            RecordingTarget(url="https://live.douyin.com/123"),
+            stream,
+            Path("downloads"),
+            RecorderOptions(),
+        )
+
+        self.assertEqual(command.url, stream.primary_url)
 
     def test_build_command_carries_proxy_configuration(self):
         recorder = HTTPStreamRecorder(opener=FakeOpener(FakeResponse()))

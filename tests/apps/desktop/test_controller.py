@@ -1,6 +1,10 @@
+import importlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 from lubo.apps.desktop.controller import DesktopController
 from lubo.core.config import AppConfig
@@ -50,6 +54,36 @@ class FakeUrlStore:
 
 
 class DesktopControllerTests(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def import_desktop_main():
+        class KivyWidget:
+            pass
+
+        modules = {
+            "kivy": ModuleType("kivy"),
+            "kivy.app": ModuleType("kivy.app"),
+            "kivy.clock": ModuleType("kivy.clock"),
+            "kivy.core": ModuleType("kivy.core"),
+            "kivy.core.text": ModuleType("kivy.core.text"),
+            "kivy.uix": ModuleType("kivy.uix"),
+            "kivy.uix.boxlayout": ModuleType("kivy.uix.boxlayout"),
+            "kivy.uix.button": ModuleType("kivy.uix.button"),
+            "kivy.uix.label": ModuleType("kivy.uix.label"),
+            "kivy.uix.scrollview": ModuleType("kivy.uix.scrollview"),
+            "kivy.uix.textinput": ModuleType("kivy.uix.textinput"),
+        }
+        modules["kivy.app"].App = KivyWidget
+        modules["kivy.clock"].Clock = object()
+        modules["kivy.core.text"].LabelBase = object()
+        modules["kivy.uix.boxlayout"].BoxLayout = KivyWidget
+        modules["kivy.uix.button"].Button = KivyWidget
+        modules["kivy.uix.label"].Label = KivyWidget
+        modules["kivy.uix.scrollview"].ScrollView = KivyWidget
+        modules["kivy.uix.textinput"].TextInput = KivyWidget
+
+        with patch.dict(sys.modules, modules):
+            return importlib.import_module("lubo.apps.desktop.main")
+
     def make_controller(self, url_file):
         config = AppConfig()
         config_service = FakeConfigService(config)
@@ -244,6 +278,79 @@ class DesktopControllerTests(unittest.IsolatedAsyncioTestCase):
                 [target.quality for target in controller.targets],
                 [Quality.HIGH, Quality.HIGH],
             )
+
+    def test_desktop_app_build_uses_default_registry_and_all_platform_cookies(self):
+        desktop_main = self.import_desktop_main()
+
+        cookies = {
+            "douyin": "douyin-cookie",
+            "bilibili": "bilibili-cookie",
+            "huya": "huya-cookie",
+            "douyu": "douyu-cookie",
+        }
+        config = AppConfig(cookies=cookies)
+        registry = object()
+        scheduler = object()
+        desktop_root = object()
+        config_path = Path("config.ini")
+        url_path = Path("URL_config.ini")
+        output_dir = Path("recordings")
+        app = SimpleNamespace(user_data_dir="desktop-data")
+
+        with (
+            patch.object(
+                desktop_main,
+                "_prepare_user_config",
+                return_value=(config_path, url_path),
+            ),
+            patch.object(
+                desktop_main,
+                "_prepare_output_dir",
+                return_value=output_dir,
+            ),
+            patch.object(desktop_main, "ConfigService") as config_service_type,
+            patch.object(desktop_main, "EventBus", return_value=object()),
+            patch.object(
+                desktop_main,
+                "build_default_registry",
+                return_value=registry,
+            ) as build_registry,
+            patch.object(desktop_main, "resolve_ffmpeg", return_value="ffmpeg"),
+            patch.object(desktop_main, "FFmpegRecorder", return_value=object()),
+            patch.object(
+                desktop_main,
+                "RecordingScheduler",
+                return_value=scheduler,
+            ) as scheduler_type,
+            patch.object(desktop_main, "DesktopController", return_value=object()),
+            patch.object(desktop_main, "DaemonTaskQueue", return_value=object()),
+            patch.object(desktop_main, "_register_cjk_font", return_value=None),
+            patch.object(
+                desktop_main,
+                "DesktopRoot",
+                return_value=desktop_root,
+            ),
+        ):
+            config_service_type.return_value.load.return_value = config
+
+            result = desktop_main.DouyinLiveRecorderDesktopApp.build(app)
+
+        self.assertIs(result, desktop_root)
+        build_registry.assert_called_once_with()
+        scheduler_config = scheduler_type.call_args.kwargs["config"]
+        self.assertIs(scheduler_type.call_args.kwargs["registry"], registry)
+        self.assertEqual(scheduler_config.cookies, cookies)
+        self.assertIsInstance(scheduler_config.cookies, dict)
+        self.assertIsNot(scheduler_config.cookies, config.cookies)
+
+    def test_desktop_url_prompt_is_platform_neutral(self):
+        source = (
+            Path(__file__).resolve().parents[3] / "lubo" / "apps" / "desktop" / "main.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('self._text("直播间 URL", "Live room URL")', source)
+        self.assertNotIn("抖音直播间 URL", source)
+        self.assertNotIn("Douyin live room URL", source)
 
 
 if __name__ == "__main__":

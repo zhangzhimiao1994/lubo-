@@ -7,9 +7,15 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from lubo.core.models import RecordingTarget, StreamInfo
 from lubo.recorders.ffmpeg import RecorderOptions, safe_name
+from lubo.resolvers.base import NoCompatibleStreamError
+
+
+class UnsupportedStreamProtocolError(NoCompatibleStreamError):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +128,10 @@ class HTTPStreamRecorder:
         url = stream.flv_url or stream.primary_url
         if not url:
             raise ValueError("stream has no recording URL")
-        if ".m3u8" in url.lower().split("?", 1)[0]:
-            raise ValueError("HLS streams require an Android FFmpeg build")
+        if urlsplit(url).path.lower().endswith(".m3u8"):
+            raise UnsupportedStreamProtocolError(
+                "Android direct recorder does not support HLS streams"
+            )
 
         anchor = target.display_name or stream.anchor_name or "live"
         target_key = hashlib.sha256(target.url.encode("utf-8")).hexdigest()[:8]
