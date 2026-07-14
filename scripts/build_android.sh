@@ -31,7 +31,6 @@ mkdir -p "$SOURCE_DIR/service"
 cp -- "$REPO_ROOT/android/main.py" "$SOURCE_DIR/main.py"
 cp -- "$REPO_ROOT/android/service/recorder_service.py" "$SOURCE_DIR/service/recorder_service.py"
 cp -R -- "$REPO_ROOT/android/java" "$SOURCE_DIR/java"
-cp -R -- "$REPO_ROOT/android/manifest" "$SOURCE_DIR/manifest"
 cp -R -- "$REPO_ROOT/douyinliverecorder" "$SOURCE_DIR/douyinliverecorder"
 cp -R -- "$REPO_ROOT/src" "$SOURCE_DIR/src"
 
@@ -39,6 +38,7 @@ python3 "$REPO_ROOT/scripts/prepare_packaged_config.py" \
     --source "$REPO_ROOT/config" \
     --output "$SOURCE_DIR/config"
 cp -- "$REPO_ROOT/android/buildozer.spec" "$PROJECT_DIR/buildozer.spec"
+cp -- "$REPO_ROOT/android/p4a_hook.py" "$PROJECT_DIR/p4a_hook.py"
 
 (
     cd "$PROJECT_DIR"

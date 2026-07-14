@@ -18,9 +18,9 @@ android.ndk = 29
 android.archs = arm64-v8a,armeabi-v7a
 android.accept_sdk_license = True
 android.add_src = %(source.dir)s/java
-android.extra_manifest_application_arguments = %(source.dir)s/manifest/application.xml
 android.service_class_name = org.douyinrecorder.mobile.RecorderPythonService
 p4a.branch = develop
+p4a.hook = p4a_hook.py
 
 [buildozer]
 log_level = 2
