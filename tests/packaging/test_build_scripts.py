@@ -194,6 +194,7 @@ class BuildScriptContractTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+        self.assertEqual(tracked.returncode, 1, tracked.stderr)
         self.assertEqual(tracked.stdout.strip(), "")
 
     def test_desktop_ci_builds_and_uploads_windows_and_linux(self):
