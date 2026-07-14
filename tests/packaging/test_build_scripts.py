@@ -133,6 +133,7 @@ class BuildScriptContractTests(unittest.TestCase):
         for script in (self.windows_script, self.linux_script):
             self.assertIn('--additional-hooks-dir "packaging/pyinstaller-hooks"', script)
         self.assertNotIn("get_deps_all", hook)
+        self.assertNotIn("get_factory_modules", hook)
         self.assertNotIn("collect_submodules", hook)
         self.assertIn("kivy.core.window.window_sdl2", hook)
         self.assertIn("kivy.core.text.text_sdl2", hook)
@@ -147,6 +148,8 @@ class BuildScriptContractTests(unittest.TestCase):
             self.linux_script,
             r'KIVY_LOG_MODE=PYTHON\s+\\\s*KIVY_NO_FILELOG=1',
         )
+        self.assertIn("--log-level WARN", self.windows_script)
+        self.assertIn("--log-level WARN", self.linux_script)
 
     def test_build_venv_is_ignored_once(self):
         matches = [

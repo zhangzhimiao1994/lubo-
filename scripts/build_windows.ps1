@@ -296,6 +296,7 @@ try {
     & $BuildPython -m PyInstaller `
         --noconfirm `
         --clean `
+        --log-level WARN `
         --name DouyinLiveRecorder `
         --onedir `
         --windowed `

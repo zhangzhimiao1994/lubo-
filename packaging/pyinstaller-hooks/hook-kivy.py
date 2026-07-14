@@ -2,7 +2,6 @@ from kivy.tools.packaging.pyinstaller_hooks import (
     add_dep_paths,
     datas,
     excludedimports,
-    get_factory_modules,
     kivy_modules,
 )
 
@@ -28,5 +27,4 @@ _desktop_providers = [
     "kivy.core.clipboard.clipboard_dummy",
 ]
 
-hiddenimports = sorted(set(get_factory_modules() + kivy_modules + _desktop_providers))
-
+hiddenimports = sorted(set(kivy_modules + _desktop_providers))

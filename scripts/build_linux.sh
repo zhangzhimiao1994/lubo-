@@ -171,6 +171,7 @@ KIVY_NO_FILELOG=1 \
 "$BUILD_PYTHON" -m PyInstaller \
     --noconfirm \
     --clean \
+    --log-level WARN \
     --name DouyinLiveRecorder \
     --onedir \
     --windowed \
