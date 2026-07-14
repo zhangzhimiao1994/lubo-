@@ -29,6 +29,7 @@ class AndroidBuildContractTests(unittest.TestCase):
 
     def test_ci_builds_and_uploads_apk(self):
         self.assertIn("scripts/build_android.sh", self.workflow)
+        self.assertIn("set -o pipefail", self.workflow)
         self.assertIn("actions/upload-artifact@v4", self.workflow)
         self.assertIn("dist/android/DouyinLiveRecorder-android-debug.apk", self.workflow)
 

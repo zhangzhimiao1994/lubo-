@@ -43,7 +43,9 @@ jobs:
         continue-on-error: true
         env:
           BUILDOZER: ${{ github.workspace }}/.venv-android/bin/buildozer
-        run: bash scripts/build_android.sh 2>&1 | tee android-build.log
+        run: |
+          set -o pipefail
+          bash scripts/build_android.sh 2>&1 | tee android-build.log
 
       - name: Report Android build failure
         if: steps.build.outcome == 'failure'
