@@ -141,6 +141,7 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("name: DouyinLiveRecorder-windows", workflow)
         self.assertIn("runs-on: ubuntu-24.04", workflow)
         self.assertIn("scripts/build_linux.sh", workflow)
+        self.assertIn("xvfb-run", workflow)
         self.assertIn("name: DouyinLiveRecorder-linux", workflow)
         self.assertIn("title=Linux build log", workflow)
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 2)

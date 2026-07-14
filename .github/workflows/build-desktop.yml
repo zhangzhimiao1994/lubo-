@@ -50,7 +50,7 @@ jobs:
       - name: Install Linux runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libgl1 libgles2 libmtdev1
+          sudo apt-get install -y ffmpeg libgl1 libgles2 libmtdev1 xvfb
 
       - name: Build Linux app
         id: linux-build
@@ -59,7 +59,8 @@ jobs:
           PYTHON: ${{ env.pythonLocation }}/bin/python
         run: |
           set -o pipefail
-          bash scripts/build_linux.sh 2>&1 | tee linux-build.log
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            bash scripts/build_linux.sh 2>&1 | tee linux-build.log
 
       - name: Report Linux build failure
         if: steps.linux-build.outcome == 'failure'
