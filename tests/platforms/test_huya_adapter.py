@@ -7,11 +7,14 @@ from lubo.resolvers.base import ResolverResult, ResolverStream
 
 
 class FakeBackend:
-    def __init__(self):
+    def __init__(self, result=None):
         self.calls = []
+        self.result = result
 
     async def resolve(self, url, *, proxy_addr="", cookies="", headers=None):
         self.calls.append((url, proxy_addr, cookies, headers))
+        if self.result is not None:
+            return self.result
         return ResolverResult(
             anchor_name="huya-anchor",
             title="huya-title",
@@ -72,6 +75,24 @@ class HuyaAdapterTests(unittest.IsolatedAsyncioTestCase):
                 )
             ],
         )
+
+    async def test_offline_result_with_no_streams_returns_offline(self):
+        adapter = HuyaAdapter(
+            FakeBackend(
+                ResolverResult(
+                    anchor_name="huya-anchor", title="offline", is_live=False
+                )
+            )
+        )
+
+        stream = await adapter.resolve(
+            RecordingTarget(url="https://www.huya.com/123"), ResolveContext()
+        )
+
+        self.assertFalse(stream.is_live)
+        self.assertEqual(stream.primary_url, "")
+        self.assertEqual(stream.flv_url, "")
+        self.assertEqual(stream.hls_url, "")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,16 @@ class ResolverPlatformAdapter:
 
     def matches(self, url: str) -> bool:
         try:
-            hostname = urlsplit(normalize_url(url)).hostname
+            normalized = normalize_url(url)
+            if "\\" in normalized:
+                return False
+            parsed = urlsplit(normalized)
+            if parsed.scheme.lower() not in {"http", "https"}:
+                return False
+            if parsed.username is not None or parsed.password is not None:
+                return False
+            _ = parsed.port
+            hostname = parsed.hostname
         except (AttributeError, TypeError, ValueError):
             return False
         return bool(hostname) and hostname.lower() in self.domains

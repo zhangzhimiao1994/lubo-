@@ -103,6 +103,33 @@ class RegistryTests(unittest.TestCase):
         )
         self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
 
+    def test_default_adapters_reject_parser_confusion_urls(self):
+        registry = build_default_registry(
+            streamlink_backend=object(), yt_dlp_backend=object()
+        )
+        domains = {
+            "douyin": "live.douyin.com",
+            "bilibili": "live.bilibili.com",
+            "huya": "www.huya.com",
+            "douyu": "www.douyu.com",
+        }
+
+        for adapter in registry.adapters:
+            domain = domains[adapter.key]
+            with self.subTest(platform=adapter.key, case="normalized"):
+                self.assertTrue(adapter.matches(f"{domain}/123"))
+            invalid_urls = (
+                f"javascript://{domain}/123",
+                f"ftp://{domain}/123",
+                f"https://{domain}:bad/123",
+                f"https://example.com\\@{domain}/123",
+                f"https://user@{domain}/123",
+                f"https://user:password@{domain}/123",
+            )
+            for url in invalid_urls:
+                with self.subTest(platform=adapter.key, url=url):
+                    self.assertFalse(adapter.matches(url))
+
 
 if __name__ == "__main__":
     unittest.main()
