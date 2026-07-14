@@ -145,6 +145,16 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("title=Linux build log", workflow)
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 2)
 
+    def test_readme_and_package_metadata_describe_the_refactored_project(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        metadata = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+
+        self.assertIn("# Lubo 直播录制", readme)
+        self.assertIn("zhangzhimiao1994/lubo-", metadata)
+        self.assertNotIn("ihmily/DouyinLiveRecorder", readme)
+        self.assertNotIn("ihmily/DouyinLiveRecorder", metadata)
+        self.assertNotIn("已支持平台", readme)
+
     def test_packaged_config_sanitizer_removes_credentials_and_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp) / "config"

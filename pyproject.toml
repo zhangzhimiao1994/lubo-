@@ -1,7 +1,7 @@
 [project]
 name = "DouyinLiveRecorder"
 version = "4.0.7"
-description = "可循环值守和多人录制的直播录制软件, 支持抖音、TikTok、Youtube、快手、虎牙、斗鱼、B站、小红书、pandatv、sooplive、flextv、popkontv、twitcasting、winktv、百度、微博、酷狗、17Live、Twitch、Acfun、CHZZK、shopee等40+平台直播录制"
+description = "面向抖音直播的跨平台循环值守与多人录制应用"
 readme = "README.md"
 authors = [{name = "Hmily"}]
 license = { text = "MIT" }
@@ -17,10 +17,10 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/ihmily/DouyinLiveRecorder"
-"Documentation" = "https://github.com/ihmily/DouyinLiveRecorder"
-"Repository" = "https://github.com/ihmily/DouyinLiveRecorder"
-"Issues" = "https://github.com/ihmily/DouyinLiveRecorder/issues"
+"Homepage" = "https://github.com/zhangzhimiao1994/lubo-"
+"Documentation" = "https://github.com/zhangzhimiao1994/lubo-#readme"
+"Repository" = "https://github.com/zhangzhimiao1994/lubo-.git"
+"Issues" = "https://github.com/zhangzhimiao1994/lubo-/issues"
 
 [project.optional-dependencies]
 gui = [
