@@ -10,6 +10,20 @@ from scripts.prepare_packaged_config import sanitize_config
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_REFERENCE_PATHS = (
+    "src",
+    "i18n",
+    "main.py",
+    "demo.py",
+    "msg_push.py",
+    "ffmpeg_install.py",
+    "i18n.py",
+    "index.html",
+    "StopRecording.vbs",
+    "Dockerfile",
+    "docker-compose.yaml",
+    ".dockerignore",
+)
 
 
 class BuildScriptContractTests(unittest.TestCase):
@@ -37,9 +51,25 @@ class BuildScriptContractTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+    def test_legacy_reference_paths_are_removed(self):
+        existing = [
+            relative_path
+            for relative_path in LEGACY_REFERENCE_PATHS
+            if (REPO_ROOT / relative_path).exists()
+        ]
+
+        self.assertEqual(
+            existing,
+            [],
+            "Legacy reference paths still exist:\n" + "\n".join(existing),
+        )
+
     def test_windows_build_uses_isolated_venv_python(self):
         script = self.windows_script
 
+        self.assertIn('$ResourceDirectories = @("config")', script)
+        self.assertNotIn('src/javascript', script)
+        self.assertNotIn('--add-data "i18n;i18n"', script)
         self.assertIn('.build-venv/windows', script)
         self.assertIn('Scripts/python.exe', script)
         self.assertIn('base-python.fingerprint', script)
@@ -89,6 +119,9 @@ class BuildScriptContractTests(unittest.TestCase):
     def test_linux_build_uses_isolated_venv_python(self):
         script = self.linux_script
 
+        self.assertIn('RESOURCE_DIRECTORIES=("config")', script)
+        self.assertNotIn('src/javascript', script)
+        self.assertNotIn('--add-data "i18n:i18n"', script)
         self.assertIn('.build-venv/linux', script)
         self.assertIn('bin/python', script)
         self.assertIn('base-python.fingerprint', script)
@@ -207,6 +240,50 @@ class BuildScriptContractTests(unittest.TestCase):
         )
         self.assertEqual(tracked.returncode, 1, tracked.stderr)
         self.assertEqual(tracked.stdout.strip(), "")
+
+    def test_runtime_and_build_files_do_not_reference_removed_resources(self):
+        forbidden_references = (
+            "from src",
+            "import src",
+            "src/javascript",
+            "i18n;i18n",
+            "i18n:i18n",
+            "REPO_ROOT/src",
+        )
+        scanned_roots = (
+            REPO_ROOT / "lubo",
+            REPO_ROOT / "android",
+            REPO_ROOT / "scripts",
+            REPO_ROOT / "packaging",
+            REPO_ROOT / ".github" / "workflows",
+        )
+        scanned_suffixes = {".java", ".py", ".ps1", ".sh", ".spec", ".xml", ".yml"}
+        violations = []
+
+        for root in scanned_roots:
+            for path in root.rglob("*"):
+                if not path.is_file() or path.suffix not in scanned_suffixes:
+                    continue
+                content = path.read_text(encoding="utf-8")
+                for reference in forbidden_references:
+                    if reference in content:
+                        violations.append(f"{path.relative_to(REPO_ROOT)}: {reference}")
+
+        self.assertEqual(
+            violations,
+            [],
+            "Removed runtime/resource references remain:\n" + "\n".join(violations),
+        )
+
+    def test_runtime_requirements_are_exactly_the_current_direct_dependencies(self):
+        requirements = (REPO_ROOT / "requirements.txt").read_text(
+            encoding="utf-8"
+        ).splitlines()
+
+        self.assertEqual(
+            requirements,
+            ["streamlink==8.4.0", "yt-dlp==2026.6.9"],
+        )
 
     def test_desktop_ci_builds_and_uploads_windows_and_linux(self):
         workflow = self.desktop_workflow

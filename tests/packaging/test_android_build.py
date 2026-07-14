@@ -54,9 +54,13 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertIn("PROPERTY_SPECIAL_USE_FGS_SUBTYPE", self.hook)
         self.assertIn("StopRecorderReceiver", self.hook)
 
-    def test_build_stages_shared_code_and_sanitized_config(self):
+    def test_build_stages_current_code_and_sanitized_config_without_legacy_src(self):
         self.assertIn('cp -R -- "$REPO_ROOT/lubo"', self.script)
-        self.assertIn('cp -R -- "$REPO_ROOT/src"', self.script)
+        self.assertNotIn('cp -R -- "$REPO_ROOT/src"', self.script)
+        self.assertNotIn('"$SOURCE_DIR/src"', self.script)
+        self.assertIn('cp -- "$REPO_ROOT/android/main.py"', self.script)
+        self.assertIn('cp -- "$REPO_ROOT/android/service/recorder_service.py"', self.script)
+        self.assertIn('cp -R -- "$REPO_ROOT/android/java"', self.script)
         self.assertIn("prepare_packaged_config.py", self.script)
         self.assertIn('cp -- "$REPO_ROOT/android/p4a_hook.py"', self.script)
         self.assertIn("Lubo-android-debug.apk", self.script)

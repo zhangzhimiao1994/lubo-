@@ -131,7 +131,7 @@ fi
 printf 'Using build Python %s at %s\n' "$BUILD_PYTHON_VERSION" "$BUILD_PYTHON"
 
 ENTRY_POINT="lubo/apps/desktop/main.py"
-RESOURCE_DIRECTORIES=("config" "i18n" "src/javascript")
+RESOURCE_DIRECTORIES=("config")
 
 if [[ ! -f "$ENTRY_POINT" ]]; then
     echo "Desktop entry point not found: $ENTRY_POINT" >&2
@@ -179,8 +179,6 @@ KIVY_NO_FILELOG=1 \
     --collect-data kivy \
     --add-binary "$FFMPEG_PATH:." \
     --add-data "$PACKAGED_CONFIG:config" \
-    --add-data "i18n:i18n" \
-    --add-data "src/javascript:src/javascript" \
     "lubo/apps/desktop/main.py"
 
 DIST_PATH="$REPO_ROOT/dist/Lubo"

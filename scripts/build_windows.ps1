@@ -127,7 +127,7 @@ Push-Location -LiteralPath $RepoRoot
 try {
     Write-BuildPhase "Preparing isolated build environment"
     $EntryPoint = "lubo/apps/desktop/main.py"
-    $ResourceDirectories = @("config", "i18n", "src/javascript")
+    $ResourceDirectories = @("config")
     $BuildVenvRoot = Join-Path $RepoRoot ".build-venv"
     $ExpectedBuildVenv = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".build-venv/windows"))
     $BuildVenv = $ExpectedBuildVenv
@@ -309,8 +309,6 @@ try {
             --collect-data kivy `
             --add-data "$FFmpegPath;." `
             --add-data "$PackagedConfig;config" `
-            --add-data "i18n;i18n" `
-            --add-data "src/javascript;src/javascript" `
             "lubo/apps/desktop/main.py"
         $PyInstallerExitCode = $LASTEXITCODE
     }
