@@ -5,19 +5,54 @@ import configparser
 from pathlib import Path
 
 
-def sanitize_config(source: Path, destination: Path) -> None:
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.read(source, encoding="utf-8-sig")
+CONFIG_SCHEMA = {
+    "recorder": {
+        "save_path": "",
+        "output_format": "ts",
+        "quality": "original",
+        "split_enabled": "true",
+        "split_seconds": "1800",
+        "convert_to_mp4": "true",
+    },
+    "monitor": {
+        "loop_seconds": "300",
+        "max_concurrency": "3",
+    },
+    "proxy": {
+        "enabled": "false",
+        "address": "",
+    },
+    "cookies": {
+        "douyin": "",
+        "bilibili": "",
+        "huya": "",
+        "douyu": "",
+    },
+}
 
-    if parser.has_option("recorder", "save_path"):
-        parser.set("recorder", "save_path", "")
-    if parser.has_section("cookies"):
-        for key in parser.options("cookies"):
-            parser.set("cookies", key, "")
+
+def sanitize_config(source: Path, destination: Path) -> None:
+    if not source.is_file():
+        raise FileNotFoundError(source)
+
+    source_parser = configparser.ConfigParser(interpolation=None)
+    source_parser.read(source, encoding="utf-8-sig")
+    source_parser.defaults().clear()
+
+    sanitized = configparser.ConfigParser(interpolation=None)
+    for section, defaults in CONFIG_SCHEMA.items():
+        sanitized[section] = {
+            key: (
+                ""
+                if section == "cookies" or key == "save_path"
+                else source_parser.get(section, key, fallback=default)
+            )
+            for key, default in defaults.items()
+        }
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("w", encoding="utf-8", newline="\n") as config_file:
-        parser.write(config_file)
+        sanitized.write(config_file)
 
 
 def main() -> None:

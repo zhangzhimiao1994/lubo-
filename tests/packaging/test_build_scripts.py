@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.prepare_packaged_config import sanitize_config
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -263,13 +265,14 @@ class BuildScriptContractTests(unittest.TestCase):
             source_dir.mkdir()
             source = source_dir / "config.ini"
             source_content = (
+                "[DEFAULT]\n"
+                "convert_to_mp4 = SECRET_DEFAULT\n"
                 "[recorder]\n"
                 "save_path = D:/private/recordings\n"
                 "output_format = mkv\n"
                 "quality = high\n"
                 "split_enabled = false\n"
                 "split_seconds = 600\n"
-                "convert_to_mp4 = false\n"
                 "[monitor]\n"
                 "loop_seconds = 45\n"
                 "max_concurrency = 5\n"
@@ -280,6 +283,16 @@ class BuildScriptContractTests(unittest.TestCase):
                 "douyin = dy-secret\n"
                 "bilibili = bili-secret\n"
                 "future_platform = future-secret\n"
+                "[Cookie]\n"
+                "legacy = SECRET_LEGACY_COOKIE\n"
+                "[CoOkIeS]\n"
+                "variant = SECRET_CASE_VARIANT\n"
+                "[Authorization]\n"
+                "token = TOKEN_AUTHORIZATION\n"
+                "[账号密码]\n"
+                "password = PASSWORD_ACCOUNT\n"
+                "[unknown]\n"
+                "credential = SECRET_UNKNOWN\n"
             )
             source.write_text(source_content, encoding="utf-8")
 
@@ -295,16 +308,45 @@ class BuildScriptContractTests(unittest.TestCase):
                 check=True,
             )
 
+            packaged_path = output_dir / "config.ini"
+            packaged_text = packaged_path.read_text(encoding="utf-8-sig")
             parser = configparser.ConfigParser()
-            parser.read(output_dir / "config.ini", encoding="utf-8-sig")
+            parser.read_string(packaged_text)
             self.assertEqual((output_dir / "URL_config.ini").read_text(encoding="utf-8-sig"), "")
             self.assertEqual(source.read_text(encoding="utf-8"), source_content)
+            self.assertEqual(parser.sections(), ["recorder", "monitor", "proxy", "cookies"])
+            self.assertEqual(
+                set(parser["recorder"]),
+                {
+                    "save_path",
+                    "output_format",
+                    "quality",
+                    "split_enabled",
+                    "split_seconds",
+                    "convert_to_mp4",
+                },
+            )
+            self.assertEqual(set(parser["monitor"]), {"loop_seconds", "max_concurrency"})
+            self.assertEqual(set(parser["proxy"]), {"enabled", "address"})
+            self.assertEqual(set(parser["cookies"]), {"douyin", "bilibili", "huya", "douyu"})
             self.assertEqual(parser["recorder"]["save_path"], "")
             self.assertEqual(parser["recorder"]["output_format"], "mkv")
             self.assertEqual(parser["recorder"]["quality"], "high")
+            self.assertEqual(parser["recorder"]["convert_to_mp4"], "true")
             self.assertEqual(parser["monitor"]["loop_seconds"], "45")
             self.assertEqual(parser["proxy"]["address"], "proxy.example:8080")
             self.assertTrue(all(value == "" for value in parser["cookies"].values()))
+            for marker in ("SECRET", "TOKEN", "PASSWORD"):
+                self.assertNotIn(marker, packaged_text)
+
+    def test_packaged_config_sanitizer_rejects_missing_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / "output" / "config.ini"
+
+            with self.assertRaises(FileNotFoundError):
+                sanitize_config(Path(tmp) / "missing.ini", destination)
+
+            self.assertFalse(destination.exists())
 
     def test_packaged_config_sanitizer_accepts_repository_template(self):
         with tempfile.TemporaryDirectory() as tmp:

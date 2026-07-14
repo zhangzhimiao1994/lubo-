@@ -27,7 +27,10 @@ class AppConfig:
     cookies: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        self.cookies = MappingProxyType(dict(self.cookies))
+        supplied = dict(self.cookies)
+        self.cookies = MappingProxyType(
+            {key: supplied.get(key, "") for key in PLATFORM_KEYS}
+        )
 
 
 class ConfigService:

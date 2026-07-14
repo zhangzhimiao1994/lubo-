@@ -73,12 +73,27 @@ class ConfigServiceTests(unittest.TestCase):
                 cookies["douyin"] = "replacement"  # type: ignore[index]
 
     def test_app_config_defensively_copies_cookies(self):
-        supplied = {"douyin": "original"}
+        supplied = {"douyin": "original", "future_platform": "ignored"}
 
         config = AppConfig(cookies=supplied)
         supplied["douyin"] = "changed"
 
-        self.assertEqual(config.cookies, {"douyin": "original"})
+        self.assertEqual(
+            config.cookies,
+            {
+                "douyin": "original",
+                "bilibili": "",
+                "huya": "",
+                "douyu": "",
+            },
+        )
+        with self.assertRaises(TypeError):
+            config.cookies["douyin"] = "replacement"  # type: ignore[index]
+
+    def test_app_config_default_cookies_have_exact_platform_keys(self):
+        config = AppConfig()
+
+        self.assertEqual(config.cookies, dict.fromkeys(PLATFORM_KEYS, ""))
         with self.assertRaises(TypeError):
             config.cookies["douyin"] = "replacement"  # type: ignore[index]
 
@@ -143,6 +158,21 @@ class ConfigServiceTests(unittest.TestCase):
             service.save(expected)
 
             self.assertEqual(service.load(), expected)
+
+    def test_save_and_reload_normalizes_partial_and_extra_cookies(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            service = ConfigService(Path(tmp) / "config.ini")
+            expected = AppConfig(
+                cookies={"bilibili": "bili", "future_platform": "ignored"}
+            )
+
+            service.save(expected)
+
+            self.assertEqual(service.load(), expected)
+            self.assertEqual(
+                expected.cookies,
+                {"douyin": "", "bilibili": "bili", "huya": "", "douyu": ""},
+            )
 
     def test_save_rewrites_existing_file_to_only_the_current_schema(self):
         with tempfile.TemporaryDirectory() as tmp:
