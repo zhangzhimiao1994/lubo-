@@ -33,6 +33,7 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertIn("title=Android build log", self.workflow)
         self.assertIn("PYTHONUSERBASE", self.workflow)
         self.assertIn('.android-user/bin" >> "$GITHUB_PATH', self.workflow)
+        self.assertIn("actions/cache/save@v4", self.workflow)
         self.assertIn("actions/upload-artifact@v4", self.workflow)
         self.assertIn("dist/android/DouyinLiveRecorder-android-debug.apk", self.workflow)
 
