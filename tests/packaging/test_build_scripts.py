@@ -274,8 +274,9 @@ class BuildScriptContractTests(unittest.TestCase):
 
     def test_product_build_and_app_files_contain_no_legacy_branding(self):
         legacy_markers = (
-            "DouyinLive" + "Recorder",
-            "Douyin Live " + "Recorder",
+            "douyinlive" + "recorder",
+            "douyin live " + "recorder",
+            "douyin-live-" + "recorder",
             "org." + "douyinrecorder",
         )
         paths = [
@@ -297,9 +298,15 @@ class BuildScriptContractTests(unittest.TestCase):
         )
 
         for path in paths:
-            content = path.read_text(encoding="utf-8")
+            content = path.read_text(encoding="utf-8").casefold()
             for marker in legacy_markers:
                 self.assertNotIn(marker, content, f"{marker!r} remains in {path}")
+            compact_content = re.sub(r"[^a-z]+", "", content)
+            self.assertNotIn(
+                "douyinlive" + "recorderdesktopapp",
+                compact_content,
+                f"legacy desktop class compatibility remains in {path}",
+            )
 
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

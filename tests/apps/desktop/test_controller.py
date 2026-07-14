@@ -395,7 +395,7 @@ class DesktopControllerTests(unittest.IsolatedAsyncioTestCase):
         ):
             config_service_type.return_value.load.return_value = config
 
-            result = desktop_main.DouyinLiveRecorderDesktopApp.build(app)
+            result = desktop_main.LuboDesktopApp.build(app)
 
         self.assertIs(result, desktop_root)
         build_registry.assert_called_once_with()

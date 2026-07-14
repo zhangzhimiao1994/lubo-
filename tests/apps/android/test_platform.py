@@ -8,6 +8,7 @@ from unittest.mock import patch
 from lubo.apps.android.platform import (
     PACKAGE_NAME,
     SERVICE_CLASS,
+    app_storage_root,
     request_service_stop,
     start_recorder_service,
 )
@@ -25,6 +26,14 @@ class AndroidPlatformTests(unittest.TestCase):
             request_service_stop(root)
 
             self.assertEqual((root / "stop.request").read_text(encoding="ascii"), "stop\n")
+
+    def test_non_android_storage_uses_lubo_fallback_directory(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(Path, "home", return_value=Path(tmp)),
+            patch.dict(sys.modules, {"android": None, "android.storage": None}),
+        ):
+            self.assertEqual(app_storage_root(), Path(tmp) / ".lubo-recorder")
 
     def test_start_service_clears_marker_and_uses_generated_service(self):
         calls = []

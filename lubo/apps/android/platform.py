@@ -12,7 +12,7 @@ def app_storage_root() -> Path:
     try:
         from android.storage import app_storage_path
     except ImportError:
-        return Path.home() / ".douyin-live-recorder-android"
+        return Path.home() / ".lubo-recorder"
     return Path(app_storage_path())
 
 

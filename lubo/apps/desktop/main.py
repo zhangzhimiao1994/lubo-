@@ -638,13 +638,6 @@ class LuboDesktopApp(App):
                 logger.exception("Failed to shut down desktop executor")
 
 
-def __getattr__(name: str) -> Any:
-    legacy_app_name = "".join(("Douyin", "Live", "Recorder", "Desktop", "App"))
-    if name == legacy_app_name:
-        return LuboDesktopApp
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def main() -> None:
     LuboDesktopApp().run()
 
