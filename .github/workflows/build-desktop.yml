@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
           cache: pip
 
       - name: Install FFmpeg
@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.12"
           cache: pip
 
       - name: Install Linux runtime dependencies
@@ -66,7 +66,7 @@ jobs:
         run: |
           log_tail="$(
             sed -E $'s/\033\\[[0-9;]*[mK]//g' linux-build.log \
-              | tail -n 100
+              | tail -n 30
           )"
           log_tail="${log_tail//'%'/'%25'}"
           log_tail="${log_tail//$'\r'/'%0D'}"

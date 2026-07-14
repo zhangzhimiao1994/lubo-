@@ -136,6 +136,7 @@ class BuildScriptContractTests(unittest.TestCase):
         workflow = self.desktop_workflow
 
         self.assertIn("runs-on: windows-2022", workflow)
+        self.assertEqual(workflow.count('python-version: "3.12"'), 2)
         self.assertIn("scripts/build_windows.ps1", workflow)
         self.assertIn("name: DouyinLiveRecorder-windows", workflow)
         self.assertIn("runs-on: ubuntu-24.04", workflow)
