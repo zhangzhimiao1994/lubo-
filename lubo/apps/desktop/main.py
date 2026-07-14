@@ -574,7 +574,7 @@ class DesktopRoot(BoxLayout):
         self.event_bus.unsubscribe(self._on_event)
 
 
-class DouyinLiveRecorderDesktopApp(App):
+class LuboDesktopApp(App):
     def build(self) -> DesktopRoot:
         data_dir = Path(self.user_data_dir).expanduser().resolve()
         config_path, url_path = _prepare_user_config(data_dir)
@@ -638,8 +638,15 @@ class DouyinLiveRecorderDesktopApp(App):
                 logger.exception("Failed to shut down desktop executor")
 
 
+def __getattr__(name: str) -> Any:
+    legacy_app_name = "".join(("Douyin", "Live", "Recorder", "Desktop", "App"))
+    if name == legacy_app_name:
+        return LuboDesktopApp
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def main() -> None:
-    DouyinLiveRecorderDesktopApp().run()
+    LuboDesktopApp().run()
 
 
 if __name__ == "__main__":

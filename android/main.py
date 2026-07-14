@@ -1,8 +1,8 @@
-from lubo.apps.android.main import main
+from lubo.apps.android.main import LuboAndroidApp
 
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 if __name__ == "__main__":
-    main()
+    LuboAndroidApp().run()

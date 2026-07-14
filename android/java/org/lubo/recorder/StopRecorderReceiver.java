@@ -1,4 +1,4 @@
-package org.douyinrecorder.mobile;
+package org.lubo.recorder;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

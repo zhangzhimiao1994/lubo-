@@ -19,7 +19,7 @@ REPLACEMENT = """        <!-- lubo-special-use-service -->
         </service>
         {% endfor %}
         <receiver
-            android:name="org.douyinrecorder.mobile.StopRecorderReceiver"
+            android:name="org.lubo.recorder.StopRecorderReceiver"
             android:exported="false" />"""
 
 

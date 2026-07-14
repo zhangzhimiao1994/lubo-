@@ -52,6 +52,7 @@ if [[ -z "$APK_PATH" ]]; then
 fi
 
 DIST_DIR="$REPO_ROOT/dist/android"
+OUTPUT_APK="$REPO_ROOT/dist/android/Lubo-android-debug.apk"
 mkdir -p "$DIST_DIR"
-cp -- "$APK_PATH" "$DIST_DIR/DouyinLiveRecorder-android-debug.apk"
-printf 'Android build complete: %s\n' "$DIST_DIR/DouyinLiveRecorder-android-debug.apk"
+cp -- "$APK_PATH" "$OUTPUT_APK"
+printf 'Android build complete: %s\n' "$OUTPUT_APK"

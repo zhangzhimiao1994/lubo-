@@ -1,4 +1,4 @@
-package org.douyinrecorder.mobile;
+package org.lubo.recorder;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -17,7 +17,7 @@ public class RecorderPythonService extends PythonService {
     protected void doStartForeground(Bundle extras) {
         Context context = getApplicationContext();
         int iconId = context.getApplicationInfo().icon;
-        String channelId = "douyin_recorder_" + getServiceId();
+        String channelId = "lubo_recorder_" + getServiceId();
 
         NotificationManager manager =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -43,7 +43,7 @@ public class RecorderPythonService extends PythonService {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         Notification notification = new Notification.Builder(context, channelId)
-                .setContentTitle(extras.getString("contentTitle", "Douyin Live Recorder"))
+                .setContentTitle(extras.getString("contentTitle", "Lubo"))
                 .setContentText(extras.getString("contentText", "Monitoring live rooms"))
                 .setSmallIcon(iconId)
                 .setContentIntent(openPendingIntent)

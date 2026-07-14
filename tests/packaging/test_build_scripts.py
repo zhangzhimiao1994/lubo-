@@ -27,6 +27,15 @@ class BuildScriptContractTests(unittest.TestCase):
         cls.desktop_workflow = (
             REPO_ROOT / ".github" / "workflows" / "build-desktop.yml"
         ).read_text(encoding="utf-8")
+        cls.desktop_app = (
+            REPO_ROOT / "lubo" / "apps" / "desktop" / "main.py"
+        ).read_text(encoding="utf-8")
+        cls.android_app = (
+            REPO_ROOT / "lubo" / "apps" / "android" / "main.py"
+        ).read_text(encoding="utf-8")
+        cls.android_entrypoint = (REPO_ROOT / "android" / "main.py").read_text(
+            encoding="utf-8"
+        )
 
     def test_windows_build_uses_isolated_venv_python(self):
         script = self.windows_script
@@ -205,13 +214,21 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("runs-on: windows-2022", workflow)
         self.assertEqual(workflow.count('python-version: "3.12"'), 2)
         self.assertIn("scripts/build_windows.ps1", workflow)
-        self.assertIn("name: DouyinLiveRecorder-windows", workflow)
+        self.assertIn("name: Lubo-windows", workflow)
+        self.assertIn("path: dist/Lubo", workflow)
         self.assertIn("runs-on: ubuntu-24.04", workflow)
         self.assertIn("scripts/build_linux.sh", workflow)
         self.assertIn("xvfb-run", workflow)
-        self.assertIn("name: DouyinLiveRecorder-linux", workflow)
+        self.assertIn("name: Lubo-linux", workflow)
         self.assertIn("title=Linux build log", workflow)
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 2)
+
+    def test_desktop_builds_and_entrypoint_use_lubo_name(self):
+        self.assertIn("class LuboDesktopApp(App):", self.desktop_app)
+        self.assertIn("LuboDesktopApp().run()", self.desktop_app)
+        for script in (self.windows_script, self.linux_script):
+            self.assertIn("--name Lubo", script)
+            self.assertIn("dist/Lubo", script)
 
     def test_windows_ci_separates_dependency_setup_from_packaging(self):
         self.assertIn("[switch]$PrepareOnly", self.windows_script)
@@ -234,11 +251,55 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("contents: write", workflow)
         self.assertIn("Build Desktop Apps", workflow)
         self.assertIn("Build Android APK", workflow)
-        self.assertIn("DouyinLiveRecorder-windows", workflow)
-        self.assertIn("DouyinLiveRecorder-linux", workflow)
-        self.assertIn("DouyinLiveRecorder-android-debug", workflow)
+        self.assertIn("--name Lubo-windows", workflow)
+        self.assertIn("--name Lubo-linux", workflow)
+        self.assertIn("--name Lubo-android-debug", workflow)
+        self.assertIn('release/Lubo-$RELEASE_TAG-windows.zip', workflow)
+        self.assertIn('release/Lubo-$RELEASE_TAG-linux.zip', workflow)
+        self.assertIn('release/Lubo-$RELEASE_TAG-android-debug.apk', workflow)
+        self.assertIn('--title "Lubo $RELEASE_TAG"', workflow)
         self.assertIn("gh release create", workflow)
         self.assertIn("gh release upload", workflow)
+
+    def test_android_app_and_entrypoint_use_lubo_class_and_title(self):
+        self.assertIn("class LuboAndroidApp(App):", self.android_app)
+        self.assertIn('title = "Lubo"', self.android_app)
+        self.assertIn('text="Lubo"', self.android_app)
+        self.assertIn("LuboAndroidApp().run()", self.android_app)
+        self.assertIn(
+            "from lubo.apps.android.main import LuboAndroidApp",
+            self.android_entrypoint,
+        )
+        self.assertIn("LuboAndroidApp().run()", self.android_entrypoint)
+
+    def test_product_build_and_app_files_contain_no_legacy_branding(self):
+        legacy_markers = (
+            "DouyinLive" + "Recorder",
+            "Douyin Live " + "Recorder",
+            "org." + "douyinrecorder",
+        )
+        paths = [
+            REPO_ROOT / "lubo" / "apps" / "desktop" / "main.py",
+            REPO_ROOT / "lubo" / "apps" / "android" / "main.py",
+            REPO_ROOT / "lubo" / "apps" / "android" / "platform.py",
+            REPO_ROOT / "scripts" / "build_windows.ps1",
+            REPO_ROOT / "scripts" / "build_linux.sh",
+            REPO_ROOT / "scripts" / "build_android.sh",
+            REPO_ROOT / ".github" / "workflows" / "build-desktop.yml",
+            REPO_ROOT / ".github" / "workflows" / "build-android.yml",
+            REPO_ROOT / ".github" / "workflows" / "publish-release.yml",
+        ]
+        paths.extend(
+            path
+            for path in (REPO_ROOT / "android").rglob("*")
+            if path.is_file()
+            and path.suffix in {".java", ".py", ".spec", ".xml"}
+        )
+
+        for path in paths:
+            content = path.read_text(encoding="utf-8")
+            for marker in legacy_markers:
+                self.assertNotIn(marker, content, f"{marker!r} remains in {path}")
 
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

@@ -59,8 +59,8 @@ jobs:
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
-          name: DouyinLiveRecorder-windows
-          path: dist/DouyinLiveRecorder
+          name: Lubo-windows
+          path: dist/Lubo
           if-no-files-found: error
 
   linux:
@@ -105,6 +105,6 @@ jobs:
       - name: Upload Linux app
         uses: actions/upload-artifact@v4
         with:
-          name: DouyinLiveRecorder-linux
-          path: dist/DouyinLiveRecorder
+          name: Lubo-linux
+          path: dist/Lubo
           if-no-files-found: error

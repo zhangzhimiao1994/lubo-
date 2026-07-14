@@ -84,6 +84,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DouyinLiveRecorder-android-debug
-          path: dist/android/DouyinLiveRecorder-android-debug.apk
+          name: Lubo-android-debug
+          path: dist/android/Lubo-android-debug.apk
           if-no-files-found: error

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from lubo.apps.android.platform import (
+    PACKAGE_NAME,
     SERVICE_CLASS,
     request_service_stop,
     start_recorder_service,
@@ -13,6 +14,10 @@ from lubo.apps.android.platform import (
 
 
 class AndroidPlatformTests(unittest.TestCase):
+    def test_android_package_name_uses_lubo_namespace(self):
+        self.assertEqual(PACKAGE_NAME, "org.lubo.recorder")
+        self.assertEqual(SERVICE_CLASS, "org.lubo.recorder.ServiceRecorder")
+
     def test_request_service_stop_writes_marker(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "app"
@@ -53,7 +58,7 @@ class AndroidPlatformTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertEqual(len(calls), 1)
             self.assertIs(calls[0][0], activity)
-            self.assertIn("Douyin Live Recorder", calls[0])
+            self.assertIn("Lubo", calls[0])
 
 
 if __name__ == "__main__":

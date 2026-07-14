@@ -49,7 +49,7 @@ class RecorderMobileRoot(BoxLayout):
         self.targets = self.store.load()
 
         title = Label(
-            text="Douyin Live Recorder",
+            text="Lubo",
             size_hint_y=None,
             height=dp(44),
             font_size="22sp",
@@ -142,8 +142,8 @@ class RecorderMobileRoot(BoxLayout):
         self.status_label.text = f"{status.get('message', 'Stopped')}  |  Recording: {active}"
 
 
-class DouyinLiveRecorderAndroidApp(App):
-    title = "Douyin Live Recorder"
+class LuboAndroidApp(App):
+    title = "Lubo"
 
     def build(self) -> RecorderMobileRoot:
         request_runtime_permissions()
@@ -151,7 +151,7 @@ class DouyinLiveRecorderAndroidApp(App):
 
 
 def main() -> None:
-    DouyinLiveRecorderAndroidApp().run()
+    LuboAndroidApp().run()
 
 
 if __name__ == "__main__":

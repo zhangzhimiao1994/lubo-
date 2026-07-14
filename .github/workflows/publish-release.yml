@@ -92,11 +92,11 @@ jobs:
         run: |
           set -euo pipefail
           gh run download "$DESKTOP_RUN" --repo "$GITHUB_REPOSITORY" \
-            --name DouyinLiveRecorder-windows --dir stage/windows
+            --name Lubo-windows --dir stage/windows
           gh run download "$DESKTOP_RUN" --repo "$GITHUB_REPOSITORY" \
-            --name DouyinLiveRecorder-linux --dir stage/linux
+            --name Lubo-linux --dir stage/linux
           gh run download "$ANDROID_RUN" --repo "$GITHUB_REPOSITORY" \
-            --name DouyinLiveRecorder-android-debug --dir stage/android
+            --name Lubo-android-debug --dir stage/android
 
       - name: Prepare permanent release assets
         shell: bash

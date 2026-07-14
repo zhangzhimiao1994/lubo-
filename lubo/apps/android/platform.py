@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-PACKAGE_NAME = "org.douyinrecorder.mobile"
+PACKAGE_NAME = "org.lubo.recorder"
 SERVICE_CLASS = f"{PACKAGE_NAME}.ServiceRecorder"
 STOP_REQUEST_FILE = "stop.request"
 
@@ -41,7 +41,7 @@ def start_recorder_service(root: Path) -> None:
     service.start(
         activity,
         "",
-        "Douyin Live Recorder",
+        "Lubo",
         "Monitoring live rooms; tap Stop to finish recordings",
         "",
     )

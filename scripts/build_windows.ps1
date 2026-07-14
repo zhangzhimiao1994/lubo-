@@ -302,7 +302,7 @@ try {
             --noconfirm `
             --clean `
             --log-level INFO `
-            --name DouyinLiveRecorder `
+            --name Lubo `
             --onedir `
             --windowed `
             --additional-hooks-dir "packaging/pyinstaller-hooks" `
@@ -328,7 +328,7 @@ try {
     }
 
     Write-BuildPhase "Verifying packaged output"
-    $DistPath = Join-Path $RepoRoot "dist/DouyinLiveRecorder"
+    $DistPath = Join-Path $RepoRoot "dist/Lubo"
     if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) {
         throw "Expected build output not found: $DistPath"
     }

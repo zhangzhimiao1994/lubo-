@@ -1,12 +1,12 @@
 [app]
-title = Douyin Live Recorder
-package.name = mobile
-package.domain = org.douyinrecorder
+title = Lubo
+package.name = recorder
+package.domain = org.lubo
 source.dir = appsource
 source.include_exts = py,ini,json,js,java,xml,png,jpg
 source.exclude_dirs = tests,build,dist,.git,.github
-version = 0.1.0
-requirements = python3,kivy==2.3.1,pyjnius,android,requests,loguru,pycryptodome,distro,tqdm,httpx,h2,PyExecJS,certifi
+version = 0.2.0
+requirements = python3,kivy==2.3.1,pyjnius,android,streamlink==8.4.0,yt-dlp==2026.6.9
 orientation = portrait
 fullscreen = 0
 services = recorder:service/recorder_service.py:foreground:sticky:foregroundServiceType=specialUse
@@ -18,7 +18,7 @@ android.ndk = 29
 android.archs = arm64-v8a,armeabi-v7a
 android.accept_sdk_license = True
 android.add_src = %(source.dir)s/java
-android.service_class_name = org.douyinrecorder.mobile.RecorderPythonService
+android.service_class_name = org.lubo.recorder.RecorderPythonService
 p4a.branch = develop
 p4a.hook = p4a_hook.py
 

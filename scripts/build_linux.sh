@@ -172,7 +172,7 @@ KIVY_NO_FILELOG=1 \
     --noconfirm \
     --clean \
     --log-level INFO \
-    --name DouyinLiveRecorder \
+    --name Lubo \
     --onedir \
     --windowed \
     --additional-hooks-dir "packaging/pyinstaller-hooks" \
@@ -183,7 +183,7 @@ KIVY_NO_FILELOG=1 \
     --add-data "src/javascript:src/javascript" \
     "lubo/apps/desktop/main.py"
 
-DIST_PATH="$REPO_ROOT/dist/DouyinLiveRecorder"
+DIST_PATH="$REPO_ROOT/dist/Lubo"
 if [[ ! -d "$DIST_PATH" ]]; then
     echo "Expected build output not found: $DIST_PATH" >&2
     exit 1
