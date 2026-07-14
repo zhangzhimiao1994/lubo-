@@ -29,6 +29,7 @@ jobs:
           .venv-android/bin/pip install \
             "cython==0.29.34" \
             "buildozer @ git+https://github.com/kivy/buildozer.git"
+          echo "$GITHUB_WORKSPACE/.venv-android/bin" >> "$GITHUB_PATH"
 
       - name: Restore Android toolchain cache
         uses: actions/cache@v4
