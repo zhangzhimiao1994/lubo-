@@ -1,91 +1,57 @@
-name: 🐛 Bug report
-description: 创建Bug报告以帮助项目改进。
-title: 🐛[BUG] 请输入标题
-labels: bug
+name: Lubo Bug 报告
+description: 报告可复现的 Lubo 缺陷
+title: "[Bug] "
+labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: |
-        📝 **请在上方的`title`中填写一个简洁明了的标题**，格式建议为：🐛[Bug] 简短描述。
-        例如：🐛[Bug] B站某些直播间无法录制。
+      value: 请先[搜索现有 issue](https://github.com/zhangzhimiao1994/lubo-/issues?q=is%3Aissue)，并移除 Cookie、签名参数、代理凭据和私人路径。
   - type: checkboxes
+    id: checks
     attributes:
-      label: ⚠️ 确认是否已存在类似问题
-      description: >
-        🔍 [点击这里搜索历史issue](https://github.com/ihmily/DouyinLiveRecorder/issues?q=is%3Aissue) 
-        请确保你的问题没有被报告过。
+      label: 提交前确认
       options:
-        - label: 我已经搜索过issues，没有找到类似问题
+        - label: 我已搜索现有 issue，未发现相同问题。
+          required: true
+        - label: 我已从日志和截图中移除敏感信息。
           required: true
   - type: dropdown
+    id: platform
     attributes:
-      label: 🔧 运行方式
-      description: 请选择你是如何运行程序的。
+      label: 运行平台
       options:
-        - 直接运行的exe文件
-        - 使用源代码运行
-        - 使用docker运行
+        - Windows
+        - Linux
+        - Android
     validations:
       required: true
   - type: dropdown
+    id: service
     attributes:
-      label: 🐍 如果是使用源代码运行，请选择你的Python环境版本
-      description: 请选择你运行程序的Python版本。
+      label: 直播平台
       options:
-        - Python 3.10
-        - Python 3.11
-        - Python 3.12
-        - Python 3.13
-        - Other (请在问题中说明)
-    validations:
-      required: false
-  - type: dropdown
-    attributes:
-      label: 💻 请选择你的系统环境
-      description: 请选择你运行程序的具体系统版本。
-      options:
-        - Windows 10
-        - Windows 11
-        - macOS
-        - Ubuntu
-        - CentOS
-        - Fedora
-        - Debian
-        - Other (请在问题中说明)
+        - Douyin / 抖音
+        - Bilibili Live / B站直播
+        - Huya / 虎牙
+        - Douyu / 斗鱼
+        - 与平台无关
     validations:
       required: true
-  - type: checkboxes
+  - type: input
+    id: version
     attributes:
-      label: ⚠️ 确认是否已经重试多次
-      description: >
-        有时可能是你的设备或者网络问题导致的。
-      options:
-        - label: 我已经尝试过多次，仍然出现问题
-          required: true
-  - type: textarea
-    attributes:
-      label: 🕹 复现步骤
-      description: |
-        **⚠️ 不能复现将会关闭issue.**
-        请按照以下格式填写：
-        1. 录制的直播间地址是...
-        2. 使用的录制格式是...
-        3. ...
-      placeholder: |
-        1. ...
-        2. ...
-        3. ...
+      label: Lubo 版本或 commit
     validations:
       required: true
   - type: textarea
+    id: reproduce
     attributes:
-      label: 😯 问题描述
-      description: 详细描述出现的问题，或提供有关截图。
+      label: 复现步骤
+      placeholder: 说明输入、操作、预期结果和实际结果。
     validations:
       required: true
   - type: textarea
+    id: logs
     attributes:
-      label: 📜 错误信息
-      description: 如果有，请贴出相关的日志错误信息或者截图。
-    validations:
-      required: false
+      label: 已脱敏的日志
+      render: shell

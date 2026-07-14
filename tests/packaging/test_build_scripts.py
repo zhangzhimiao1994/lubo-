@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -24,6 +25,37 @@ LEGACY_REFERENCE_PATHS = (
     "docker-compose.yaml",
     ".dockerignore",
 )
+
+REMOVED_DOCUMENTS = (
+    "docs/cross-platform-apps.md",
+    "docs/superpowers/specs/2026-07-14-cross-platform-recorder-design.md",
+    "docs/superpowers/plans/2026-07-14-core-douyin-desktop-vertical-slice.md",
+    "docs/superpowers/specs/2026-07-14-lubo-multi-platform-clean-room-design.md",
+    "docs/superpowers/plans/2026-07-14-lubo-multi-platform-clean-room.md",
+)
+
+CURRENT_REPOSITORY = "https://github.com/zhangzhimiao1994/lubo-"
+
+
+def tracked_text_files():
+    output = subprocess.check_output(
+        ["git", "ls-files", "-z"],
+        cwd=REPO_ROOT,
+    )
+    for raw_relative_path in output.split(b"\0"):
+        if not raw_relative_path:
+            continue
+        relative_path = raw_relative_path.decode("utf-8", errors="surrogateescape")
+        path = REPO_ROOT / relative_path
+        if not path.is_file():
+            continue
+        content = path.read_bytes()
+        if b"\0" in content:
+            continue
+        try:
+            yield relative_path, content.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
 
 
 class BuildScriptContractTests(unittest.TestCase):
@@ -385,15 +417,211 @@ class BuildScriptContractTests(unittest.TestCase):
                 f"legacy desktop class compatibility remains in {path}",
             )
 
-    def test_readme_and_package_metadata_describe_the_refactored_project(self):
-        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        metadata = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    def test_all_tracked_text_has_independent_project_identity(self):
+        forbidden = {
+            "old repository URL": (
+                "https://github.com/" + "ih" + "mily/" + "DouyinLive" + "Recorder"
+            ),
+            "old CamelCase application name": "DouyinLive" + "Recorder",
+            "old lowercase package name": "douyinlive" + "recorder",
+            "old Android package": "org." + "douyin" + "recorder",
+            "legacy entrypoint phrase": "legacy " + "main.py",
+            "old author": "Hm" + "ily",
+        }
+        violations = []
+        scanned = 0
 
-        self.assertIn("# Lubo 直播录制", readme)
-        self.assertIn("zhangzhimiao1994/lubo-", metadata)
-        self.assertNotIn("ihmily/DouyinLiveRecorder", readme)
-        self.assertNotIn("ihmily/DouyinLiveRecorder", metadata)
-        self.assertNotIn("已支持平台", readme)
+        for relative_path, content in tracked_text_files():
+            scanned += 1
+            for label, token in forbidden.items():
+                if (
+                    label == "old author"
+                    and relative_path == "THIRD_PARTY_NOTICES.md"
+                ):
+                    continue
+                if token in content:
+                    violations.append(f"{relative_path}: {label}")
+
+        self.assertGreater(scanned, 50)
+        self.assertEqual(
+            violations,
+            [],
+            "Forbidden project identity remains:\n" + "\n".join(violations),
+        )
+
+    def test_readme_is_complete_multi_platform_user_documentation(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        required_sections = (
+            "# Lubo",
+            "## 支持平台",
+            "## Windows / Linux 桌面使用",
+            "## Android 使用",
+            "## URL_config.ini",
+            "## 本地 config.ini",
+            "## 源码安装",
+            "## 构建",
+            "## GitHub Releases",
+            "## 架构",
+            "## 测试",
+            "## 法律与合规",
+        )
+        for section in required_sections:
+            self.assertIn(section, readme)
+
+        for platform in (
+            "抖音 / Douyin",
+            "Bilibili Live / B站直播",
+            "Huya / 虎牙",
+            "Douyu / 斗鱼",
+        ):
+            self.assertIn(platform, readme)
+
+        for cookie_key in ("douyin", "bilibili", "huya", "douyu"):
+            self.assertIn(f"`{cookie_key}`", readme)
+        for section_name in ("recorder", "monitor", "proxy", "cookies"):
+            self.assertIn(f"`[{section_name}]`", readme)
+
+        self.assertIn("FLV/HTTP", readme)
+        self.assertIn("HLS-only", readme)
+        self.assertIn("不创建文件", readme)
+        self.assertIn("本身不处理 HLS", readme)
+        self.assertIn("requirements-gui.txt", readme)
+        self.assertIn("python -m lubo.apps.desktop.main", readme)
+        self.assertIn("dist/Lubo", readme)
+        self.assertIn("dist/android/Lubo-android-debug.apk", readme)
+        self.assertIn(CURRENT_REPOSITORY + "/releases", readme)
+        self.assertIn("平台变更", readme)
+        self.assertIn("风控", readme)
+        self.assertIn("Cookie", readme)
+
+        github_urls = re.findall(r"https://github\.com/[^\s)>]+", readme)
+        self.assertTrue(github_urls)
+        self.assertTrue(
+            all(url.startswith(CURRENT_REPOSITORY) for url in github_urls),
+            github_urls,
+        )
+
+    def test_pyproject_declares_exact_distribution_metadata(self):
+        with (REPO_ROOT / "pyproject.toml").open("rb") as metadata_file:
+            metadata = tomllib.load(metadata_file)
+
+        project = metadata["project"]
+        self.assertEqual(project["name"], "lubo-live-recorder")
+        self.assertEqual(project["version"], "0.2.0a1")
+        self.assertIn("独立", project["description"])
+        self.assertIn("多平台", project["description"])
+        self.assertEqual(project["authors"], [{"name": "zhangzhimiao1994"}])
+        self.assertEqual(project["license"], {"text": "MIT"})
+        self.assertEqual(project["requires-python"], ">=3.10")
+        self.assertEqual(
+            project["dependencies"],
+            ["streamlink==8.4.0", "yt-dlp==2026.6.9"],
+        )
+        self.assertEqual(
+            project["optional-dependencies"]["gui"],
+            ["kivy>=2.3.0", "pyinstaller>=6.0.0"],
+        )
+        self.assertEqual(
+            project["urls"],
+            {
+                "Homepage": CURRENT_REPOSITORY,
+                "Documentation": CURRENT_REPOSITORY + "#readme",
+                "Repository": CURRENT_REPOSITORY + ".git",
+                "Issues": CURRENT_REPOSITORY + "/issues",
+            },
+        )
+
+    def test_current_and_historical_mit_notices_are_complete(self):
+        license_text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+        notice = (REPO_ROOT / "THIRD_PARTY_NOTICES.md").read_text(
+            encoding="utf-8"
+        )
+        standard_terms = (
+            "Permission is hereby granted, free of charge, to any person obtaining "
+            "a copy"
+        )
+        disclaimer = 'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND'
+
+        self.assertTrue(license_text.startswith("MIT License\n\n"))
+        self.assertIn("Copyright (c) 2026 zhangzhimiao1994", license_text)
+        self.assertIn(standard_terms, license_text.replace("\n", " "))
+        self.assertIn(disclaimer, license_text.replace("\n", " "))
+
+        self.assertIn(
+            "Historical MIT notice retained for license compliance",
+            notice.splitlines()[0],
+        )
+        self.assertEqual(notice.count("MIT License"), 1)
+        self.assertEqual(notice.count("Copyright (c) 2025 " + "Hm" + "ily"), 1)
+        self.assertIn(standard_terms, notice.replace("\n", " "))
+        self.assertIn(disclaimer, notice.replace("\n", " "))
+        self.assertNotIn("github.com", notice)
+
+    def test_platform_documentation_matches_registered_adapters(self):
+        platforms = (REPO_ROOT / "docs" / "platforms.md").read_text(
+            encoding="utf-8"
+        )
+        expected_rows = (
+            "| `douyin` | Douyin / 抖音 | `live.douyin.com`, `v.douyin.com`, `www.douyin.com` | Streamlink | `douyin` |",
+            "| `bilibili` | Bilibili Live / B站直播 | `live.bilibili.com` | Streamlink | `bilibili` |",
+            "| `huya` | Huya / 虎牙 | `huya.com`, `www.huya.com`, `m.huya.com` | Streamlink | `huya` |",
+            "| `douyu` | Douyu / 斗鱼 | `douyu.com`, `www.douyu.com`, `m.douyu.com` | yt-dlp | `douyu` |",
+        )
+        for row in expected_rows:
+            self.assertIn(row, platforms)
+        self.assertEqual(platforms.count("仅直接 FLV/HTTP；HLS-only 报错且不创建文件"), 4)
+
+    def test_only_current_issue_forms_and_pr_template_remain(self):
+        issue_template_dir = REPO_ROOT / ".github" / "ISSUE_TEMPLATE"
+        self.assertEqual(
+            sorted(path.name for path in issue_template_dir.iterdir()),
+            ["bug.yml", "feature.yml"],
+        )
+        issue_url = CURRENT_REPOSITORY + "/issues"
+        for template_name in ("bug.yml", "feature.yml"):
+            content = (issue_template_dir / template_name).read_text(encoding="utf-8")
+            self.assertIn("Lubo", content)
+            self.assertIn(issue_url, content)
+
+        pull_request_template = (
+            REPO_ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md"
+        ).read_text(encoding="utf-8")
+        for heading in ("## 变更", "## 验证", "## 平台影响", "## 清单"):
+            self.assertIn(heading, pull_request_template)
+
+    def test_migration_documents_are_replaced_by_platform_reference(self):
+        for relative_path in REMOVED_DOCUMENTS:
+            self.assertFalse((REPO_ROOT / relative_path).exists(), relative_path)
+        self.assertTrue((REPO_ROOT / "docs" / "platforms.md").is_file())
+
+    def test_gitignore_keeps_templates_tracked_and_ignores_local_state(self):
+        required_rules = (
+            "__pycache__/",
+            ".venv/",
+            ".pytest_cache/",
+            ".coverage",
+            "build/",
+            "dist/",
+            "*.egg-info/",
+            ".build-venv/",
+            ".android-build/",
+            ".buildozer/",
+            "/config/config.local.ini",
+            "/config/URL_config.local.ini",
+            "recordings/",
+            "downloads/",
+            "logs/",
+        )
+        for rule in required_rules:
+            self.assertIn(rule, self.gitignore_lines)
+
+        for template_path in ("config/config.ini", "config/URL_config.ini"):
+            ignored = subprocess.run(
+                ["git", "check-ignore", "--no-index", "--quiet", template_path],
+                cwd=REPO_ROOT,
+                check=False,
+            )
+            self.assertEqual(ignored.returncode, 1, template_path)
 
     def test_config_template_contains_only_the_current_schema(self):
         parser = configparser.ConfigParser()

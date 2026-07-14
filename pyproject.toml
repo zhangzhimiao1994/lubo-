@@ -1,29 +1,24 @@
 [project]
-name = "DouyinLiveRecorder"
-version = "4.0.7"
-description = "面向抖音直播的跨平台循环值守与多人录制应用"
+name = "lubo-live-recorder"
+version = "0.2.0a1"
+description = "独立的多平台直播录制应用"
 readme = "README.md"
-authors = [{name = "Hmily"}]
-license = { text = "MIT" }
+authors = [{name = "zhangzhimiao1994"}]
+license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
-    "requests>=2.31.0",
-    "loguru>=0.7.3",
-    "pycryptodome>=3.20.0",
-    "distro>=1.9.0",
-    "tqdm>=4.67.1",
-    "httpx[http2]>=0.28.1",
-    "PyExecJS>=1.5.1"
+    "streamlink==8.4.0",
+    "yt-dlp==2026.6.9",
 ]
-
-[project.urls]
-"Homepage" = "https://github.com/zhangzhimiao1994/lubo-"
-"Documentation" = "https://github.com/zhangzhimiao1994/lubo-#readme"
-"Repository" = "https://github.com/zhangzhimiao1994/lubo-.git"
-"Issues" = "https://github.com/zhangzhimiao1994/lubo-/issues"
 
 [project.optional-dependencies]
 gui = [
     "kivy>=2.3.0",
-    "pyinstaller>=6.0.0"
+    "pyinstaller>=6.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/zhangzhimiao1994/lubo-"
+Documentation = "https://github.com/zhangzhimiao1994/lubo-#readme"
+Repository = "https://github.com/zhangzhimiao1994/lubo-.git"
+Issues = "https://github.com/zhangzhimiao1994/lubo-/issues"
