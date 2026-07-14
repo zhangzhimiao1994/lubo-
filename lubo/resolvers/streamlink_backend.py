@@ -79,8 +79,14 @@ class StreamlinkBackend:
                 return ResolverResult(anchor_name=anchor_name, title=title)
 
             resolved_streams = tuple(
-                _make_stream(str(quality_name), stream.to_url())
+                resolved_stream
                 for quality_name, stream in streams.items()
+                if (
+                    resolved_stream := _make_stream(
+                        str(quality_name), stream.to_url()
+                    )
+                )
+                is not None
             )
             return ResolverResult(
                 anchor_name=anchor_name,
@@ -109,10 +115,13 @@ def _metadata_text(metadata: Any, name: str) -> str:
         return ""
 
 
-def _make_stream(quality_name: str, stream_url: str) -> ResolverStream:
+def _make_stream(quality_name: str, stream_url: str) -> ResolverStream | None:
     match = _HEIGHT_PATTERN.search(quality_name)
     height = int(match.group(1)) if match else None
-    path = urlparse(stream_url).path.lower()
+    parsed_url = urlparse(stream_url)
+    if parsed_url.scheme.lower() not in {"http", "https"}:
+        return None
+    path = parsed_url.path.lower()
     if path.endswith(".flv"):
         protocol = "flv"
     elif path.endswith(".m3u8"):

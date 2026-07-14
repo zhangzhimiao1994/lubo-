@@ -103,6 +103,23 @@ class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.title, "Ended")
         self.assertEqual(result.streams, ())
 
+    async def test_resolve_keeps_http_streams_and_filters_non_http_streams(self):
+        plugin = FakePlugin(
+            {
+                "source": FakeStream("https://cdn.example/live.mp4"),
+                "legacy": FakeStream("rtmp://cdn.example/live"),
+            },
+            {"author": "Anchor", "title": "Live"},
+        )
+
+        result = await StreamlinkBackend(SessionFactory(FakeSession(plugin))).resolve(
+            "https://live.example/room"
+        )
+
+        self.assertEqual(len(result.streams), 1)
+        self.assertEqual(result.streams[0].url, "https://cdn.example/live.mp4")
+        self.assertEqual(result.streams[0].protocol, "http")
+
     async def test_resolve_redacts_engine_errors(self):
         source_url = "https://live.example/room?signature=url-secret"
         cookie_secret = "cookie-secret"
