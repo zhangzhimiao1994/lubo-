@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from douyinliverecorder.apps.android.platform import (
+from lubo.apps.android.platform import (
     SERVICE_CLASS,
     request_service_stop,
     start_recorder_service,

@@ -12,15 +12,15 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
-from douyinliverecorder.apps.android.platform import (
+from lubo.apps.android.platform import (
     app_storage_root,
     request_runtime_permissions,
     request_service_stop,
     start_recorder_service,
 )
-from douyinliverecorder.apps.android.state import read_status
-from douyinliverecorder.core.config import ConfigService
-from douyinliverecorder.core.url_store import UrlStore
+from lubo.apps.android.state import read_status
+from lubo.core.config import ConfigService
+from lubo.core.url_store import UrlStore
 
 
 def _resource_root() -> Path:

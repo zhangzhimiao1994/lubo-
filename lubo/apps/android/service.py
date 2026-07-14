@@ -5,16 +5,16 @@ import logging
 import time
 from pathlib import Path
 
-from douyinliverecorder.apps.android.platform import STOP_REQUEST_FILE, app_storage_root
-from douyinliverecorder.apps.android.state import write_status
-from douyinliverecorder.core.config import ConfigService
-from douyinliverecorder.core.events import EventBus, RecorderEvent
-from douyinliverecorder.core.models import RecordingStatus
-from douyinliverecorder.core.scheduler import RecordingScheduler, SchedulerConfig
-from douyinliverecorder.core.url_store import UrlStore
-from douyinliverecorder.platforms.douyin import DouyinAdapter
-from douyinliverecorder.platforms.registry import PlatformRegistry
-from douyinliverecorder.recorders.http_stream import DirectHttpRecorder
+from lubo.apps.android.platform import STOP_REQUEST_FILE, app_storage_root
+from lubo.apps.android.state import write_status
+from lubo.core.config import ConfigService
+from lubo.core.events import EventBus, RecorderEvent
+from lubo.core.models import RecordingStatus
+from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
+from lubo.core.url_store import UrlStore
+from lubo.platforms.douyin import DouyinAdapter
+from lubo.platforms.registry import PlatformRegistry
+from lubo.recorders.http_stream import DirectHttpRecorder
 
 
 logger = logging.getLogger(__name__)

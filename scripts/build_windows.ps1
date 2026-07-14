@@ -126,7 +126,7 @@ Write-Host "Using base Python $($PythonInfo.Version) at $BasePython"
 Push-Location -LiteralPath $RepoRoot
 try {
     Write-BuildPhase "Preparing isolated build environment"
-    $EntryPoint = "douyinliverecorder/apps/desktop/main.py"
+    $EntryPoint = "lubo/apps/desktop/main.py"
     $ResourceDirectories = @("config", "i18n", "src/javascript")
     $BuildVenvRoot = Join-Path $RepoRoot ".build-venv"
     $ExpectedBuildVenv = [IO.Path]::GetFullPath((Join-Path $RepoRoot ".build-venv/windows"))
@@ -311,7 +311,7 @@ try {
             --add-data "$PackagedConfig;config" `
             --add-data "i18n;i18n" `
             --add-data "src/javascript;src/javascript" `
-            "douyinliverecorder/apps/desktop/main.py"
+            "lubo/apps/desktop/main.py"
         $PyInstallerExitCode = $LASTEXITCODE
     }
     finally {

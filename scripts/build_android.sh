@@ -31,7 +31,7 @@ mkdir -p "$SOURCE_DIR/service"
 cp -- "$REPO_ROOT/android/main.py" "$SOURCE_DIR/main.py"
 cp -- "$REPO_ROOT/android/service/recorder_service.py" "$SOURCE_DIR/service/recorder_service.py"
 cp -R -- "$REPO_ROOT/android/java" "$SOURCE_DIR/java"
-cp -R -- "$REPO_ROOT/douyinliverecorder" "$SOURCE_DIR/douyinliverecorder"
+cp -R -- "$REPO_ROOT/lubo" "$SOURCE_DIR/lubo"
 cp -R -- "$REPO_ROOT/src" "$SOURCE_DIR/src"
 
 python3 "$REPO_ROOT/scripts/prepare_packaged_config.py" \

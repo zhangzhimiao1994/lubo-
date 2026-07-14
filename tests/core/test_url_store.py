@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.core.models import Quality
-from douyinliverecorder.core.url_store import UrlStore
+from lubo.core.models import Quality
+from lubo.core.url_store import UrlStore
 
 
 class UrlStoreTests(unittest.TestCase):

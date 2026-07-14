@@ -171,6 +171,31 @@ class BuildScriptContractTests(unittest.TestCase):
 
         self.assertEqual(matches, [".build-venv/"])
 
+    def test_project_uses_only_the_lubo_python_package(self):
+        legacy_package = "douyinlive" + "recorder"
+
+        self.assertTrue((REPO_ROOT / "lubo" / "__init__.py").is_file())
+        self.assertFalse((REPO_ROOT / legacy_package).exists())
+        tracked = subprocess.run(
+            [
+                "git",
+                "grep",
+                "-l",
+                legacy_package,
+                "--",
+                "*.py",
+                "*.sh",
+                "*.ps1",
+                "*.yml",
+                "*.toml",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(tracked.stdout.strip(), "")
+
     def test_desktop_ci_builds_and_uploads_windows_and_linux(self):
         workflow = self.desktop_workflow
 

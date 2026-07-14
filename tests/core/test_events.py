@@ -1,6 +1,6 @@
 import unittest
 
-from douyinliverecorder.core.events import EventBus, RecorderEvent, RecorderEventType
+from lubo.core.events import EventBus, RecorderEvent, RecorderEventType
 
 
 class EventBusTests(unittest.TestCase):
@@ -103,7 +103,7 @@ class EventBusTests(unittest.TestCase):
         bus.subscribe(received.append)
         event = RecorderEvent(type=RecorderEventType.RECORDING_STARTED, target_id="abc")
 
-        with self.assertLogs("douyinliverecorder.core.events", level="ERROR"):
+        with self.assertLogs("lubo.core.events", level="ERROR"):
             bus.publish(event)
 
         self.assertEqual(received, [event])
@@ -119,7 +119,7 @@ class EventBusTests(unittest.TestCase):
         bus.subscribe(received.append)
         event = RecorderEvent(type=RecorderEventType.RECORDING_STARTED, target_id="abc")
 
-        with self.assertLogs("douyinliverecorder.core.events", level="ERROR") as logs:
+        with self.assertLogs("lubo.core.events", level="ERROR") as logs:
             bus.publish(event)
 
         self.assertIn("Recorder event subscriber failed", logs.output[0])

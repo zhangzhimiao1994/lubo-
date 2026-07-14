@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.apps.desktop.controller import DesktopController
-from douyinliverecorder.core.config import AppConfig
-from douyinliverecorder.core.models import Quality, RecordingTarget
-from douyinliverecorder.core.url_store import UrlStore
+from lubo.apps.desktop.controller import DesktopController
+from lubo.core.config import AppConfig
+from lubo.core.models import Quality, RecordingTarget
+from lubo.core.url_store import UrlStore
 
 
 class FakeConfigService:

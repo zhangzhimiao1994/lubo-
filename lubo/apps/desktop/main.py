@@ -24,14 +24,14 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
-from douyinliverecorder.apps.desktop.controller import DesktopController
-from douyinliverecorder.apps.desktop.runtime import resolve_ffmpeg
-from douyinliverecorder.core.config import ConfigService
-from douyinliverecorder.core.events import EventBus, RecorderEvent
-from douyinliverecorder.core.scheduler import RecordingScheduler, SchedulerConfig
-from douyinliverecorder.platforms.douyin import DouyinAdapter
-from douyinliverecorder.platforms.registry import PlatformRegistry
-from douyinliverecorder.recorders.ffmpeg import FFmpegRecorder
+from lubo.apps.desktop.controller import DesktopController
+from lubo.apps.desktop.runtime import resolve_ffmpeg
+from lubo.core.config import ConfigService
+from lubo.core.events import EventBus, RecorderEvent
+from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
+from lubo.platforms.douyin import DouyinAdapter
+from lubo.platforms.registry import PlatformRegistry
+from lubo.recorders.ffmpeg import FFmpegRecorder
 
 
 logger = logging.getLogger(__name__)

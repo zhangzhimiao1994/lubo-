@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from douyinliverecorder.core.models import OutputFormat, RecordingTarget, StreamInfo
+from lubo.core.models import OutputFormat, RecordingTarget, StreamInfo
 
 
 @dataclass(frozen=True, slots=True)

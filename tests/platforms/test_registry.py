@@ -1,8 +1,8 @@
 import unittest
 
-from douyinliverecorder.core.models import RecordingTarget, StreamInfo
-from douyinliverecorder.platforms.base import PlatformAdapter, ResolveContext
-from douyinliverecorder.platforms.registry import PlatformRegistry
+from lubo.core.models import RecordingTarget, StreamInfo
+from lubo.platforms.base import PlatformAdapter, ResolveContext
+from lubo.platforms.registry import PlatformRegistry
 
 
 class FakeAdapter:

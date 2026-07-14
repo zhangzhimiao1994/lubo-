@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from douyinliverecorder.core.models import RecordingTarget, StreamInfo
-from douyinliverecorder.recorders.ffmpeg import RecorderOptions, safe_name
+from lubo.core.models import RecordingTarget, StreamInfo
+from lubo.recorders.ffmpeg import RecorderOptions, safe_name
 
 
 @dataclass(frozen=True, slots=True)

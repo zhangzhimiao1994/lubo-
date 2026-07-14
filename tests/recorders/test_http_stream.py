@@ -5,9 +5,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from douyinliverecorder.core.models import RecordingTarget, StreamInfo
-from douyinliverecorder.recorders.ffmpeg import RecorderOptions
-from douyinliverecorder.recorders.http_stream import (
+from lubo.core.models import RecordingTarget, StreamInfo
+from lubo.recorders.ffmpeg import RecorderOptions
+from lubo.recorders.http_stream import (
     DirectHttpRecorder,
     HTTPStreamCommand,
     HTTPStreamRecorder,
@@ -64,7 +64,7 @@ class HTTPStreamRecorderTests(unittest.TestCase):
             display_name=' Anchor / A:*? "test" ',
         )
         with patch(
-            "douyinliverecorder.recorders.http_stream.time.strftime",
+            "lubo.recorders.http_stream.time.strftime",
             return_value="2026-07-14_12-34-56",
         ):
             return recorder.build_command(

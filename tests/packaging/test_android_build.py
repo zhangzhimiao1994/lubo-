@@ -25,7 +25,7 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertIn("StopRecorderReceiver", self.hook)
 
     def test_build_stages_shared_code_and_sanitized_config(self):
-        self.assertIn('cp -R -- "$REPO_ROOT/douyinliverecorder"', self.script)
+        self.assertIn('cp -R -- "$REPO_ROOT/lubo"', self.script)
         self.assertIn('cp -R -- "$REPO_ROOT/src"', self.script)
         self.assertIn("prepare_packaged_config.py", self.script)
         self.assertIn('cp -- "$REPO_ROOT/android/p4a_hook.py"', self.script)

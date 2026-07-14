@@ -130,7 +130,7 @@ fi
 
 printf 'Using build Python %s at %s\n' "$BUILD_PYTHON_VERSION" "$BUILD_PYTHON"
 
-ENTRY_POINT="douyinliverecorder/apps/desktop/main.py"
+ENTRY_POINT="lubo/apps/desktop/main.py"
 RESOURCE_DIRECTORIES=("config" "i18n" "src/javascript")
 
 if [[ ! -f "$ENTRY_POINT" ]]; then
@@ -181,7 +181,7 @@ KIVY_NO_FILELOG=1 \
     --add-data "$PACKAGED_CONFIG:config" \
     --add-data "i18n:i18n" \
     --add-data "src/javascript:src/javascript" \
-    "douyinliverecorder/apps/desktop/main.py"
+    "lubo/apps/desktop/main.py"
 
 DIST_PATH="$REPO_ROOT/dist/DouyinLiveRecorder"
 if [[ ! -d "$DIST_PATH" ]]; then

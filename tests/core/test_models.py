@@ -1,6 +1,6 @@
 import unittest
 
-from douyinliverecorder.core.models import (
+from lubo.core.models import (
     OutputFormat,
     Quality,
     RecordingStatus,

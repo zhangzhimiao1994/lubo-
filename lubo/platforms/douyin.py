@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from urllib.parse import urlsplit
 
-from douyinliverecorder.core.models import Quality, RecordingTarget, StreamInfo, normalize_url
-from douyinliverecorder.platforms.base import ResolveContext
+from lubo.core.models import Quality, RecordingTarget, StreamInfo, normalize_url
+from lubo.platforms.base import ResolveContext
 
 
 FetchFn = Callable[[str, str, str], Awaitable[dict]]

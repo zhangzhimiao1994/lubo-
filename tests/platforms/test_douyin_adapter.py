@@ -1,8 +1,8 @@
 import unittest
 
-from douyinliverecorder.core.models import Quality, RecordingTarget
-from douyinliverecorder.platforms.base import ResolveContext
-from douyinliverecorder.platforms.douyin import DouyinAdapter
+from lubo.core.models import Quality, RecordingTarget
+from lubo.platforms.base import ResolveContext
+from lubo.platforms.douyin import DouyinAdapter
 
 
 async def fake_web_fetch(url: str, proxy_addr: str, cookies: str):

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.apps.android.state import read_status, write_status
+from lubo.apps.android.state import read_status, write_status
 
 
 class AndroidStateTests(unittest.TestCase):

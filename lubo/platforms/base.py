@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Protocol
 
-from douyinliverecorder.core.models import Quality, RecordingTarget, StreamInfo
+from lubo.core.models import Quality, RecordingTarget, StreamInfo
 
 
 @dataclass(frozen=True, slots=True)

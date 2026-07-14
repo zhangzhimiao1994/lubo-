@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.apps.android.service import run_service
-from douyinliverecorder.apps.android.state import read_status
+from lubo.apps.android.service import run_service
+from lubo.apps.android.state import read_status
 
 
 class AndroidServiceTests(unittest.TestCase):

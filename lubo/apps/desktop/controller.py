@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from douyinliverecorder.core.config import AppConfig, ConfigService
-from douyinliverecorder.core.models import Quality, RecordingTarget
-from douyinliverecorder.core.scheduler import RecordingScheduler
-from douyinliverecorder.core.url_store import UrlStore
+from lubo.core.config import AppConfig, ConfigService
+from lubo.core.models import Quality, RecordingTarget
+from lubo.core.scheduler import RecordingScheduler
+from lubo.core.url_store import UrlStore
 
 
 class DesktopController:

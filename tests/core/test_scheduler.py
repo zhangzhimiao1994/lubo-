@@ -4,11 +4,11 @@ import time
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.core.events import EventBus, RecorderEventType
-from douyinliverecorder.core.models import Quality, RecordingStatus, RecordingTarget, StreamInfo
-from douyinliverecorder.core.scheduler import RecordingScheduler, SchedulerConfig
-from douyinliverecorder.platforms.base import ResolveContext
-from douyinliverecorder.platforms.registry import PlatformRegistry
+from lubo.core.events import EventBus, RecorderEventType
+from lubo.core.models import Quality, RecordingStatus, RecordingTarget, StreamInfo
+from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
+from lubo.platforms.base import ResolveContext
+from lubo.platforms.registry import PlatformRegistry
 
 
 class FakeAdapter:

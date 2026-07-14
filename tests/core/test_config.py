@@ -2,8 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from douyinliverecorder.core.config import AppConfig, ConfigService
-from douyinliverecorder.core.models import OutputFormat, Quality
+from lubo.core.config import AppConfig, ConfigService
+from lubo.core.models import OutputFormat, Quality
 
 
 class ConfigServiceTests(unittest.TestCase):

@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from douyinliverecorder.apps.desktop.runtime import resolve_ffmpeg
+from lubo.apps.desktop.runtime import resolve_ffmpeg
 
 
 class DesktopRuntimeTests(unittest.TestCase):

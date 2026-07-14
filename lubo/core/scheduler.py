@@ -7,11 +7,11 @@ from pathlib import Path
 from threading import Condition, RLock
 from typing import Any
 
-from douyinliverecorder.core.events import EventBus, RecorderEvent, RecorderEventType
-from douyinliverecorder.core.models import OutputFormat, Quality, RecordingStatus, RecordingTarget, RecordingTask
-from douyinliverecorder.platforms.base import ResolveContext
-from douyinliverecorder.platforms.registry import PlatformRegistry
-from douyinliverecorder.recorders.ffmpeg import RecorderOptions
+from lubo.core.events import EventBus, RecorderEvent, RecorderEventType
+from lubo.core.models import OutputFormat, Quality, RecordingStatus, RecordingTarget, RecordingTask
+from lubo.platforms.base import ResolveContext
+from lubo.platforms.registry import PlatformRegistry
+from lubo.recorders.ffmpeg import RecorderOptions
 
 
 @dataclass(frozen=True, slots=True)

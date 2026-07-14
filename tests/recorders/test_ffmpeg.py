@@ -4,8 +4,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from douyinliverecorder.core.models import OutputFormat, RecordingTarget, StreamInfo
-from douyinliverecorder.recorders.ffmpeg import FFmpegRecorder, RecorderOptions
+from lubo.core.models import OutputFormat, RecordingTarget, StreamInfo
+from lubo.recorders.ffmpeg import FFmpegRecorder, RecorderOptions
 
 
 class FFmpegRecorderTests(unittest.TestCase):
