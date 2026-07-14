@@ -172,6 +172,7 @@ PACKAGED_CONFIG="build/package-config"
     --name DouyinLiveRecorder \
     --onedir \
     --windowed \
+    --additional-hooks-dir "packaging/pyinstaller-hooks" \
     --collect-data kivy \
     --add-binary "$FFMPEG_PATH:." \
     --add-data "$PACKAGED_CONFIG:config" \

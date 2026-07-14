@@ -123,6 +123,20 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn('--add-data "$PACKAGED_CONFIG:config"', script)
         self.assertNotIn('--add-data "config:config"', script)
 
+    def test_desktop_build_uses_bounded_kivy_hook(self):
+        hook_path = REPO_ROOT / "packaging" / "pyinstaller-hooks" / "hook-kivy.py"
+
+        self.assertTrue(hook_path.is_file(), "A project Kivy hook must bound provider discovery")
+        hook = hook_path.read_text(encoding="utf-8")
+        for script in (self.windows_script, self.linux_script):
+            self.assertIn('--additional-hooks-dir "packaging/pyinstaller-hooks"', script)
+        self.assertNotIn("get_deps_all", hook)
+        self.assertNotIn("collect_submodules", hook)
+        self.assertIn("kivy.core.window.window_sdl2", hook)
+        self.assertIn("kivy.core.text.text_sdl2", hook)
+        self.assertIn("kivy.core.image.img_sdl2", hook)
+        self.assertIn("kivy.core.clipboard.clipboard_winctypes", hook)
+
     def test_build_venv_is_ignored_once(self):
         matches = [
             line

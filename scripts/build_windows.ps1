@@ -270,6 +270,7 @@ try {
         --name DouyinLiveRecorder `
         --onedir `
         --windowed `
+        --additional-hooks-dir "packaging/pyinstaller-hooks" `
         --collect-data kivy `
         --add-binary "$FFmpegPath;." `
         --add-data "$PackagedConfig;config" `
