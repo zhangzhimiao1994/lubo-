@@ -5,6 +5,13 @@ from lubo.resolvers.base import PlatformAccessError
 from lubo.resolvers.yt_dlp_backend import YtDlpBackend
 
 
+class UserNotLive(Exception):
+    pass
+
+
+UserNotLive.__module__ = "yt_dlp.utils._utils"
+
+
 class FakeYoutubeDL:
     def __init__(self, info):
         self.info = info
@@ -128,6 +135,54 @@ class YtDlpBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.streams, ())
         self.assertIsNone(factory.options["proxy"])
         self.assertEqual(factory.options["http_headers"], {})
+
+    async def test_resolve_returns_offline_result_for_user_not_live_error(self):
+        factory = YdlFactory(UserNotLive("This live event will begin soon"))
+
+        result = await YtDlpBackend(factory).resolve("https://video.example/offline")
+
+        self.assertFalse(result.is_live)
+        self.assertEqual(result.streams, ())
+
+    async def test_resolve_normalizes_format_height_and_headers(self):
+        factory = YdlFactory(
+            {
+                "is_live": True,
+                "formats": [
+                    {
+                        "url": "https://cdn.example/valid.mp4",
+                        "format_note": "valid",
+                        "height": "720",
+                        "protocol": "https",
+                        "ext": "mp4",
+                        "http_headers": {
+                            "Referer": "https://video.example",
+                            "X-Count": 3,
+                            7: "invalid-key",
+                        },
+                    },
+                    {
+                        "url": "https://cdn.example/invalid.mp4",
+                        "format_note": "invalid",
+                        "height": "unknown",
+                        "protocol": "https",
+                        "ext": "mp4",
+                        "http_headers": "not-a-mapping",
+                    },
+                ],
+            }
+        )
+
+        result = await YtDlpBackend(factory).resolve("https://video.example/live")
+
+        self.assertEqual(result.streams[0].height, 720)
+        self.assertIsInstance(result.streams[0].height, int)
+        self.assertEqual(
+            dict(result.streams[0].headers),
+            {"Referer": "https://video.example"},
+        )
+        self.assertIsNone(result.streams[1].height)
+        self.assertEqual(dict(result.streams[1].headers), {})
 
     async def test_resolve_redacts_engine_errors(self):
         source_url = "https://video.example/live?signature=url-secret"

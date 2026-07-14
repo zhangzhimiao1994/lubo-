@@ -89,7 +89,9 @@ class YtDlpBackend:
             )
         except ResolverUnavailableError:
             raise
-        except Exception:
+        except Exception as error:
+            if _is_user_not_live_error(error):
+                return ResolverResult()
             raise PlatformAccessError(_ACCESS_ERROR_MESSAGE) from None
 
 
@@ -110,6 +112,37 @@ def _first_text(info: Any, *names: str) -> str:
         if value:
             return str(value)
     return ""
+
+
+def _is_user_not_live_error(error: Exception) -> bool:
+    return any(
+        error_type.__name__ == "UserNotLive"
+        and error_type.__module__.startswith("yt_dlp.utils")
+        for error_type in type(error).__mro__
+    )
+
+
+def _normalize_height(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, float):
+        return int(value) if value > 0 and value.is_integer() else None
+    if isinstance(value, str) and value.strip().isdigit():
+        height = int(value.strip())
+        return height if height > 0 else None
+    return None
+
+
+def _normalize_headers(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        key: header_value
+        for key, header_value in value.items()
+        if isinstance(key, str) and isinstance(header_value, str)
+    }
 
 
 def _make_stream(format_info: Any) -> ResolverStream | None:
@@ -135,6 +168,6 @@ def _make_stream(format_info: Any) -> ResolverStream | None:
         url=str(stream_url),
         protocol=protocol,
         quality_name=str(quality_name),
-        height=format_info.get("height"),
-        headers=format_info.get("http_headers") or {},
+        height=_normalize_height(format_info.get("height")),
+        headers=_normalize_headers(format_info.get("http_headers")),
     )

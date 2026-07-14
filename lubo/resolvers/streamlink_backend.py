@@ -70,11 +70,11 @@ class StreamlinkBackend:
                     {name: morsel.value for name, morsel in parsed_cookies.items()}
                 )
 
-            plugin = session.resolve_url(url)
+            _, plugin_class, resolved_url = session.resolve_url(url)
+            plugin = plugin_class(session, resolved_url)
             streams = plugin.streams()
-            metadata = plugin.get_metadata()
-            anchor_name = _metadata_text(metadata, "author")
-            title = _metadata_text(metadata, "title")
+            anchor_name = _metadata_text(plugin, "author")
+            title = _metadata_text(plugin, "title")
             if not streams:
                 return ResolverResult(anchor_name=anchor_name, title=title)
 
@@ -83,7 +83,7 @@ class StreamlinkBackend:
                 for quality_name, stream in streams.items()
                 if (
                     resolved_stream := _make_stream(
-                        str(quality_name), stream.to_url()
+                        str(quality_name), stream.url
                     )
                 )
                 is not None

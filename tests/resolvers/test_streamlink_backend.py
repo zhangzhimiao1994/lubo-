@@ -9,22 +9,19 @@ class FakeStream:
     def __init__(self, url: str):
         self.url = url
 
-    def to_url(self) -> str:
-        return self.url
-
 
 class FakePlugin:
-    def __init__(self, streams, metadata):
-        self._streams = streams
-        self._metadata = metadata
+    def __init__(self, session, resolved_url):
+        self.session = session
+        self.resolved_url = resolved_url
+        self.author = session.author
+        self.title = session.title
+        session.plugin_instances.append(self)
 
     def streams(self):
-        if isinstance(self._streams, Exception):
-            raise self._streams
-        return self._streams
-
-    def get_metadata(self):
-        return self._metadata
+        if isinstance(self.session.streams, Exception):
+            raise self.session.streams
+        return self.session.streams
 
 
 class FakeHttp:
@@ -34,18 +31,30 @@ class FakeHttp:
 
 
 class FakeSession:
-    def __init__(self, plugin):
-        self.plugin = plugin
+    def __init__(
+        self,
+        streams,
+        *,
+        author="",
+        title="",
+        resolved_url="https://resolved.example/room",
+    ):
+        self.streams = streams
+        self.author = author
+        self.title = title
+        self.plugin_instances = []
         self.http = FakeHttp()
         self.options = {}
+        self.requested_url = None
         self.resolved_url = None
+        self.plugin_resolved_url = resolved_url
 
     def set_option(self, name, value):
         self.options[name] = value
 
     def resolve_url(self, url):
-        self.resolved_url = url
-        return self.plugin
+        self.requested_url = url
+        return "fake-plugin", FakePlugin, self.plugin_resolved_url
 
 
 class SessionFactory:
@@ -60,14 +69,14 @@ class SessionFactory:
 
 class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
     async def test_resolve_maps_live_streams_metadata_and_session_options(self):
-        plugin = FakePlugin(
+        session = FakeSession(
             {
                 "1080p_alt": FakeStream("https://cdn.example/live.flv?token=ok"),
                 "best": FakeStream("https://cdn.example/live.m3u8"),
             },
-            {"author": "Anchor Name", "title": "Live Title"},
+            author="Anchor Name",
+            title="Live Title",
         )
-        session = FakeSession(plugin)
         factory = SessionFactory(session)
         main_thread_id = threading.get_ident()
 
@@ -88,13 +97,19 @@ class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.http.headers["Referer"], "https://live.example")
         self.assertEqual(session.http.cookies["session"], "session-value")
         self.assertEqual(session.http.cookies["theme"], "dark")
-        self.assertEqual(session.resolved_url, "https://live.example/room")
+        self.assertEqual(session.requested_url, "https://live.example/room")
+        self.assertEqual(len(session.plugin_instances), 1)
+        self.assertIs(session.plugin_instances[0].session, session)
+        self.assertEqual(
+            session.plugin_instances[0].resolved_url,
+            "https://resolved.example/room",
+        )
         self.assertNotEqual(factory.thread_id, main_thread_id)
 
     async def test_resolve_returns_offline_result_when_no_streams_exist(self):
-        plugin = FakePlugin({}, {"author": "Anchor", "title": "Ended"})
+        session = FakeSession({}, author="Anchor", title="Ended")
 
-        result = await StreamlinkBackend(SessionFactory(FakeSession(plugin))).resolve(
+        result = await StreamlinkBackend(SessionFactory(session)).resolve(
             "https://live.example/offline"
         )
 
@@ -104,15 +119,16 @@ class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.streams, ())
 
     async def test_resolve_keeps_http_streams_and_filters_non_http_streams(self):
-        plugin = FakePlugin(
+        session = FakeSession(
             {
                 "source": FakeStream("https://cdn.example/live.mp4"),
                 "legacy": FakeStream("rtmp://cdn.example/live"),
             },
-            {"author": "Anchor", "title": "Live"},
+            author="Anchor",
+            title="Live",
         )
 
-        result = await StreamlinkBackend(SessionFactory(FakeSession(plugin))).resolve(
+        result = await StreamlinkBackend(SessionFactory(session)).resolve(
             "https://live.example/room"
         )
 
@@ -123,15 +139,14 @@ class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
     async def test_resolve_redacts_engine_errors(self):
         source_url = "https://live.example/room?signature=url-secret"
         cookie_secret = "cookie-secret"
-        plugin = FakePlugin(
+        session = FakeSession(
             RuntimeError(
                 "session-secret at https://cdn.example/live.flv?signature=engine-secret"
-            ),
-            None,
+            )
         )
 
         with self.assertRaises(PlatformAccessError) as raised:
-            await StreamlinkBackend(SessionFactory(FakeSession(plugin))).resolve(
+            await StreamlinkBackend(SessionFactory(session)).resolve(
                 source_url,
                 cookies=f"session={cookie_secret}",
             )
