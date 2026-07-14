@@ -50,6 +50,11 @@ jobs:
       - name: Report Android build failure
         if: steps.build.outcome == 'failure'
         run: |
+          log_tail="$(tail -n 80 android-build.log)"
+          log_tail="${log_tail//'%'/'%25'}"
+          log_tail="${log_tail//$'\r'/'%0D'}"
+          log_tail="${log_tail//$'\n'/'%0A'}"
+          printf '::error title=Android build log::%s\n' "$log_tail"
           {
             echo '## Android build failure'
             echo '```text'
