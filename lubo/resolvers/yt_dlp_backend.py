@@ -115,11 +115,26 @@ def _first_text(info: Any, *names: str) -> str:
 
 
 def _is_user_not_live_error(error: Exception) -> bool:
-    return any(
-        error_type.__name__ == "UserNotLive"
-        and error_type.__module__.startswith("yt_dlp.utils")
-        for error_type in type(error).__mro__
-    )
+    pending: list[BaseException] = [error]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        identity = id(current)
+        if identity in visited:
+            continue
+        visited.add(identity)
+
+        if any(
+            error_type.__name__ == "UserNotLive"
+            and error_type.__module__.startswith("yt_dlp.utils")
+            for error_type in type(current).__mro__
+        ):
+            return True
+
+        for linked_error in (current.__cause__, current.__context__):
+            if isinstance(linked_error, BaseException):
+                pending.append(linked_error)
+    return False
 
 
 def _normalize_height(value: Any) -> int | None:

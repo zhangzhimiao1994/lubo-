@@ -12,6 +12,30 @@ class UserNotLive(Exception):
 UserNotLive.__module__ = "yt_dlp.utils._utils"
 
 
+class DownloadError(Exception):
+    pass
+
+
+def download_error_with_cause():
+    try:
+        raise UserNotLive("This live event will begin soon")
+    except UserNotLive as user_not_live:
+        try:
+            raise DownloadError("Unable to download webpage") from user_not_live
+        except DownloadError as error:
+            return error
+
+
+def download_error_with_context():
+    try:
+        try:
+            raise UserNotLive("This live event will begin soon")
+        except UserNotLive:
+            raise DownloadError("Unable to download webpage")
+    except DownloadError as error:
+        return error
+
+
 class FakeYoutubeDL:
     def __init__(self, info):
         self.info = info
@@ -138,6 +162,22 @@ class YtDlpBackendTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_resolve_returns_offline_result_for_user_not_live_error(self):
         factory = YdlFactory(UserNotLive("This live event will begin soon"))
+
+        result = await YtDlpBackend(factory).resolve("https://video.example/offline")
+
+        self.assertFalse(result.is_live)
+        self.assertEqual(result.streams, ())
+
+    async def test_resolve_returns_offline_for_wrapped_user_not_live_cause(self):
+        factory = YdlFactory(download_error_with_cause())
+
+        result = await YtDlpBackend(factory).resolve("https://video.example/offline")
+
+        self.assertFalse(result.is_live)
+        self.assertEqual(result.streams, ())
+
+    async def test_resolve_returns_offline_for_wrapped_user_not_live_context(self):
+        factory = YdlFactory(download_error_with_context())
 
         result = await YtDlpBackend(factory).resolve("https://video.example/offline")
 
