@@ -293,23 +293,38 @@ try {
     }
 
     Write-BuildPhase "Running PyInstaller"
-    & $BuildPython -m PyInstaller `
-        --noconfirm `
-        --clean `
-        --log-level INFO `
-        --name DouyinLiveRecorder `
-        --onedir `
-        --windowed `
-        --additional-hooks-dir "packaging/pyinstaller-hooks" `
-        --collect-data kivy `
-        --add-data "$FFmpegPath;." `
-        --add-data "$PackagedConfig;config" `
-        --add-data "i18n;i18n" `
-        --add-data "src/javascript;src/javascript" `
-        "douyinliverecorder/apps/desktop/main.py"
+    $PreviousKivyDoc = [Environment]::GetEnvironmentVariable("KIVY_DOC", "Process")
+    try {
+        # PyInstaller imports Kivy modules while scanning DLLs. Documentation
+        # mode prevents those imports from opening a window on headless runners.
+        $env:KIVY_DOC = "1"
+        & $BuildPython -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --log-level INFO `
+            --name DouyinLiveRecorder `
+            --onedir `
+            --windowed `
+            --additional-hooks-dir "packaging/pyinstaller-hooks" `
+            --collect-data kivy `
+            --add-data "$FFmpegPath;." `
+            --add-data "$PackagedConfig;config" `
+            --add-data "i18n;i18n" `
+            --add-data "src/javascript;src/javascript" `
+            "douyinliverecorder/apps/desktop/main.py"
+        $PyInstallerExitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($null -eq $PreviousKivyDoc) {
+            Remove-Item Env:KIVY_DOC -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:KIVY_DOC = $PreviousKivyDoc
+        }
+    }
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "PyInstaller failed with exit code $LASTEXITCODE."
+    if ($PyInstallerExitCode -ne 0) {
+        throw "PyInstaller failed with exit code $PyInstallerExitCode."
     }
 
     Write-BuildPhase "Verifying packaged output"

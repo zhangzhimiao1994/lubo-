@@ -134,7 +134,10 @@ class BuildScriptContractTests(unittest.TestCase):
             self.assertIn('--additional-hooks-dir "packaging/pyinstaller-hooks"', script)
         self.assertNotIn("get_deps_all", hook)
         self.assertNotIn("get_factory_modules", hook)
-        self.assertNotIn("collect_submodules", hook)
+        self.assertIn('collect_submodules("kivy.graphics")', hook)
+        self.assertNotIn('collect_submodules("kivy.core")', hook)
+        self.assertIn("datas = [", hook)
+        self.assertIn("excludedimports =", hook)
         self.assertIn("kivy.core.window.window_sdl2", hook)
         self.assertIn("kivy.core.text.text_sdl2", hook)
         self.assertIn("kivy.core.image.img_sdl2", hook)
@@ -150,6 +153,14 @@ class BuildScriptContractTests(unittest.TestCase):
         )
         self.assertIn("--log-level INFO", self.windows_script)
         self.assertIn("--log-level INFO", self.linux_script)
+
+    def test_windows_build_disables_kivy_window_initialization_during_analysis(self):
+        self.assertIn('$env:KIVY_DOC = "1"', self.windows_script)
+        self.assertIn('Remove-Item Env:KIVY_DOC', self.windows_script)
+        self.assertLess(
+            self.windows_script.index('$env:KIVY_DOC = "1"'),
+            self.windows_script.index('& $BuildPython -m PyInstaller'),
+        )
 
     def test_build_venv_is_ignored_once(self):
         matches = [
