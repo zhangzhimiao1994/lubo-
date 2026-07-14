@@ -66,8 +66,10 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertNotRegex(script, r'&\s+\$BasePython\s+-m\s+(?:pip|PyInstaller)\b')
         self.assertNotIn('--collect-submodules kivy', script)
         self.assertIn('--collect-data kivy', script)
+        self.assertIn('$env:FFMPEG_PATH', script)
         self.assertIn('Get-Command ffmpeg -CommandType Application', script)
-        self.assertIn('--add-binary "$FFmpegPath;."', script)
+        self.assertIn('--add-data "$FFmpegPath;."', script)
+        self.assertNotIn('--add-binary "$FFmpegPath;."', script)
         self.assertIn('throw "FFmpeg was not found on PATH.', script)
         self.assertIn('scripts/prepare_packaged_config.py', script)
         self.assertIn('--add-data "$PackagedConfig;config"', script)
@@ -175,6 +177,8 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("Prepare Windows build environment", self.desktop_workflow)
         self.assertIn("-PrepareOnly", self.desktop_workflow)
         self.assertIn("-SkipInstall", self.desktop_workflow)
+        self.assertIn("$env:ChocolateyInstall", self.desktop_workflow)
+        self.assertIn("FFMPEG_PATH", self.desktop_workflow)
 
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

@@ -268,12 +268,20 @@ try {
         return
     }
 
-    $FFmpegCommand = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if (-not $FFmpegCommand) {
-        throw "FFmpeg was not found on PATH. Install FFmpeg before building the application."
+    if ($env:FFMPEG_PATH) {
+        if (-not (Test-Path -LiteralPath $env:FFMPEG_PATH -PathType Leaf)) {
+            throw "FFMPEG_PATH does not point to a file: $($env:FFMPEG_PATH)"
+        }
+        $FFmpegPath = (Resolve-Path -LiteralPath $env:FFMPEG_PATH).Path
     }
-    $FFmpegPath = $FFmpegCommand.Source
+    else {
+        $FFmpegCommand = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if (-not $FFmpegCommand) {
+            throw "FFmpeg was not found on PATH. Install FFmpeg before building the application."
+        }
+        $FFmpegPath = $FFmpegCommand.Source
+    }
     Write-Host "Bundling FFmpeg from $FFmpegPath"
     Write-BuildPhase "Preparing packaged configuration"
     $PackagedConfig = "build/package-config"
@@ -293,7 +301,7 @@ try {
         --windowed `
         --additional-hooks-dir "packaging/pyinstaller-hooks" `
         --collect-data kivy `
-        --add-binary "$FFmpegPath;." `
+        --add-data "$FFmpegPath;." `
         --add-data "$PackagedConfig;config" `
         --add-data "i18n;i18n" `
         --add-data "src/javascript;src/javascript" `
