@@ -148,8 +148,8 @@ class BuildScriptContractTests(unittest.TestCase):
             self.linux_script,
             r'KIVY_LOG_MODE=PYTHON\s+\\\s*KIVY_NO_FILELOG=1',
         )
-        self.assertIn("--log-level WARN", self.windows_script)
-        self.assertIn("--log-level WARN", self.linux_script)
+        self.assertIn("--log-level INFO", self.windows_script)
+        self.assertIn("--log-level INFO", self.linux_script)
 
     def test_build_venv_is_ignored_once(self):
         matches = [
@@ -182,6 +182,9 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("-SkipInstall", self.desktop_workflow)
         self.assertIn("$env:ChocolateyInstall", self.desktop_workflow)
         self.assertIn("FFMPEG_PATH", self.desktop_workflow)
+        self.assertIn("id: windows-build", self.desktop_workflow)
+        self.assertIn("timeout-minutes: 12", self.desktop_workflow)
+        self.assertIn("title=Windows build log", self.desktop_workflow)
 
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

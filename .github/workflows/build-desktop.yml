@@ -37,8 +37,24 @@ jobs:
         run: scripts/build_windows.ps1 -PrepareOnly -PythonExe (Get-Command python).Source
 
       - name: Build Windows app
+        id: windows-build
+        timeout-minutes: 12
+        continue-on-error: true
         shell: pwsh
-        run: scripts/build_windows.ps1 -SkipInstall -PythonExe (Get-Command python).Source
+        run: |
+          scripts/build_windows.ps1 -SkipInstall `
+            -PythonExe (Get-Command python).Source *>&1 |
+            Tee-Object -FilePath windows-build.log
+
+      - name: Report Windows build failure
+        if: steps.windows-build.outcome == 'failure'
+        shell: pwsh
+        run: |
+          $logTail = (Get-Content windows-build.log -Tail 30) -join "`n"
+          $logTail = $logTail.Replace('%', '%25')
+          $logTail = $logTail.Replace("`r", '%0D').Replace("`n", '%0A')
+          Write-Output "::error title=Windows build log::$logTail"
+          exit 1
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
