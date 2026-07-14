@@ -141,6 +141,7 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-24.04", workflow)
         self.assertIn("scripts/build_linux.sh", workflow)
         self.assertIn("name: DouyinLiveRecorder-linux", workflow)
+        self.assertIn("title=Linux build log", workflow)
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 2)
 
     def test_packaged_config_sanitizer_removes_credentials_and_targets(self):

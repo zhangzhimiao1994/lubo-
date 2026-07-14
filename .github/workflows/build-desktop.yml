@@ -53,9 +53,26 @@ jobs:
           sudo apt-get install -y ffmpeg libgl1 libgles2 libmtdev1
 
       - name: Build Linux app
+        id: linux-build
+        continue-on-error: true
         env:
           PYTHON: ${{ env.pythonLocation }}/bin/python
-        run: bash scripts/build_linux.sh
+        run: |
+          set -o pipefail
+          bash scripts/build_linux.sh 2>&1 | tee linux-build.log
+
+      - name: Report Linux build failure
+        if: steps.linux-build.outcome == 'failure'
+        run: |
+          log_tail="$(
+            sed -E $'s/\033\\[[0-9;]*[mK]//g' linux-build.log \
+              | tail -n 100
+          )"
+          log_tail="${log_tail//'%'/'%25'}"
+          log_tail="${log_tail//$'\r'/'%0D'}"
+          log_tail="${log_tail//$'\n'/'%0A'}"
+          printf '::error title=Linux build log::%s\n' "$log_tail"
+          exit 1
 
       - name: Upload Linux app
         uses: actions/upload-artifact@v4
