@@ -25,9 +25,13 @@ jobs:
             choco install ffmpeg --no-progress -y
           }
 
+      - name: Prepare Windows build environment
+        shell: pwsh
+        run: scripts/build_windows.ps1 -PrepareOnly -PythonExe (Get-Command python).Source
+
       - name: Build Windows app
         shell: pwsh
-        run: scripts/build_windows.ps1 -PythonExe (Get-Command python).Source
+        run: scripts/build_windows.ps1 -SkipInstall -PythonExe (Get-Command python).Source
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4

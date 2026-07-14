@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$SkipInstall,
+    [switch]$PrepareOnly,
     [string]$PythonExe
 )
 
@@ -260,6 +261,11 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Dependency installation failed with exit code $LASTEXITCODE."
         }
+    }
+
+    if ($PrepareOnly) {
+        Write-BuildPhase "Build environment ready"
+        return
     }
 
     $FFmpegCommand = Get-Command ffmpeg -CommandType Application -ErrorAction SilentlyContinue |

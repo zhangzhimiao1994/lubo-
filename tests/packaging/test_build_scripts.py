@@ -169,6 +169,13 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("title=Linux build log", workflow)
         self.assertEqual(workflow.count("actions/upload-artifact@v4"), 2)
 
+    def test_windows_ci_separates_dependency_setup_from_packaging(self):
+        self.assertIn("[switch]$PrepareOnly", self.windows_script)
+        self.assertIn("if ($PrepareOnly)", self.windows_script)
+        self.assertIn("Prepare Windows build environment", self.desktop_workflow)
+        self.assertIn("-PrepareOnly", self.desktop_workflow)
+        self.assertIn("-SkipInstall", self.desktop_workflow)
+
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         metadata = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
