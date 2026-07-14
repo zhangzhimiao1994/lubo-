@@ -5,7 +5,7 @@ package.domain = org.lubo
 source.dir = appsource
 source.include_exts = py,ini,json,js,java,xml,png,jpg
 source.exclude_dirs = tests,build,dist,.git,.github
-version = 0.2.0
+version = 0.2.0a1
 requirements = python3,kivy==2.3.1,pyjnius,android,streamlink==8.4.0,yt-dlp==2026.6.9
 orientation = portrait
 fullscreen = 0

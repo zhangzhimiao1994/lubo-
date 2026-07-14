@@ -1,5 +1,7 @@
+import ast
 import configparser
 import runpy
+import tomllib
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +16,7 @@ class AndroidBuildContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.spec = (REPO_ROOT / "android" / "buildozer.spec").read_text(encoding="utf-8")
+        cls.entrypoint = (REPO_ROOT / "android" / "main.py").read_text(encoding="utf-8")
         cls.script = (REPO_ROOT / "scripts" / "build_android.sh").read_text(encoding="utf-8")
         cls.hook_path = REPO_ROOT / "android" / "p4a_hook.py"
         cls.hook = cls.hook_path.read_text(encoding="utf-8")
@@ -40,11 +43,35 @@ class AndroidBuildContractTests(unittest.TestCase):
             app["android.service_class_name"],
             "org.lubo.recorder.RecorderPythonService",
         )
-        self.assertEqual(app["version"], "0.2.0")
+        self.assertEqual(app["version"], "0.2.0a1")
         self.assertEqual(
             app["requirements"],
             "python3,kivy==2.3.1,pyjnius,android,streamlink==8.4.0,yt-dlp==2026.6.9",
         )
+
+    def test_distribution_buildozer_and_android_entrypoint_versions_match(self):
+        with (REPO_ROOT / "pyproject.toml").open("rb") as metadata_file:
+            distribution_version = tomllib.load(metadata_file)["project"]["version"]
+
+        parser = configparser.RawConfigParser()
+        parser.read_string(self.spec)
+        buildozer_version = parser["app"]["version"]
+        entrypoint_tree = ast.parse(self.entrypoint)
+        entrypoint_version = next(
+            node.value.value
+            for node in entrypoint_tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__version__"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        )
+
+        self.assertEqual(distribution_version, "0.2.0a1")
+        self.assertEqual(buildozer_version, distribution_version)
+        self.assertEqual(entrypoint_version, distribution_version)
 
     def test_foreground_service_and_required_permissions_are_declared(self):
         self.assertIn(":foreground:sticky:foregroundServiceType=specialUse", self.spec)

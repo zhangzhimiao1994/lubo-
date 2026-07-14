@@ -35,6 +35,86 @@ REMOVED_DOCUMENTS = (
 )
 
 CURRENT_REPOSITORY = "https://github.com/zhangzhimiao1994/lubo-"
+HISTORICAL_NOTICE_PATH = "THIRD_PARTY_NOTICES.md"
+HISTORICAL_AUTHOR = "Hm" + "ily"
+
+MIT_LICENSE_BODY = """Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+
+def mit_license(copyright_line):
+    return f"MIT License\n\n{copyright_line}\n\n{MIT_LICENSE_BODY}"
+
+
+def versions_matching_specifier(specifier, versions):
+    script = (
+        "import sys; "
+        "from packaging.specifiers import SpecifierSet; "
+        "from packaging.version import Version; "
+        "allowed = SpecifierSet(sys.argv[1]); "
+        "print(','.join(v for v in sys.argv[2:] if Version(v) in allowed))"
+    )
+    output = subprocess.check_output(
+        [sys.executable, "-c", script, specifier, *versions],
+        cwd=REPO_ROOT,
+        text=True,
+    )
+    return output.strip().split(",") if output.strip() else []
+
+
+def forbidden_identity_tokens():
+    return {
+        "old repository URL": (
+            "https://github.com/" + "ih" + "mily/" + "DouyinLive" + "Recorder"
+        ),
+        "old CamelCase application name": "DouyinLive" + "Recorder",
+        "old lowercase package name": "douyinlive" + "recorder",
+        "old Android package": "org." + "douyin" + "recorder",
+        "legacy entrypoint phrase": "legacy " + "main.py",
+        "old author": HISTORICAL_AUTHOR,
+    }
+
+
+def decode_tracked_text(relative_path, content):
+    if b"\0" in content:
+        raise ValueError(f"{relative_path}: tracked text contains NUL bytes")
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"{relative_path}: tracked text is not valid UTF-8") from error
+
+
+def identity_violations(relative_path, content):
+    violations = []
+    folded_content = content.casefold()
+    for label, token in forbidden_identity_tokens().items():
+        if label == "old author" and relative_path == HISTORICAL_NOTICE_PATH:
+            if content.count(HISTORICAL_AUTHOR) != 1:
+                violations.append(label)
+                continue
+            remaining = content.replace(HISTORICAL_AUTHOR, "", 1)
+            if token.casefold() in remaining.casefold():
+                violations.append(label)
+            continue
+        if token.casefold() in folded_content:
+            violations.append(label)
+    return violations
 
 
 def tracked_text_files():
@@ -45,17 +125,10 @@ def tracked_text_files():
     for raw_relative_path in output.split(b"\0"):
         if not raw_relative_path:
             continue
-        relative_path = raw_relative_path.decode("utf-8", errors="surrogateescape")
+        relative_path = raw_relative_path.decode("utf-8")
         path = REPO_ROOT / relative_path
-        if not path.is_file():
-            continue
         content = path.read_bytes()
-        if b"\0" in content:
-            continue
-        try:
-            yield relative_path, content.decode("utf-8")
-        except UnicodeDecodeError:
-            continue
+        yield relative_path, decode_tracked_text(relative_path, content)
 
 
 class BuildScriptContractTests(unittest.TestCase):
@@ -418,35 +491,65 @@ class BuildScriptContractTests(unittest.TestCase):
             )
 
     def test_all_tracked_text_has_independent_project_identity(self):
-        forbidden = {
-            "old repository URL": (
-                "https://github.com/" + "ih" + "mily/" + "DouyinLive" + "Recorder"
-            ),
-            "old CamelCase application name": "DouyinLive" + "Recorder",
-            "old lowercase package name": "douyinlive" + "recorder",
-            "old Android package": "org." + "douyin" + "recorder",
-            "legacy entrypoint phrase": "legacy " + "main.py",
-            "old author": "Hm" + "ily",
-        }
         violations = []
         scanned = 0
 
         for relative_path, content in tracked_text_files():
             scanned += 1
-            for label, token in forbidden.items():
-                if (
-                    label == "old author"
-                    and relative_path == "THIRD_PARTY_NOTICES.md"
-                ):
-                    continue
-                if token in content:
-                    violations.append(f"{relative_path}: {label}")
+            violations.extend(
+                f"{relative_path}: {label}"
+                for label in identity_violations(relative_path, content)
+            )
 
         self.assertGreater(scanned, 50)
         self.assertEqual(
             violations,
             [],
             "Forbidden project identity remains:\n" + "\n".join(violations),
+        )
+
+    def test_tracked_text_decoder_rejects_nul_and_non_utf8_content(self):
+        cases = (
+            ("nul.txt", b"Lubo\0text", "NUL"),
+            ("invalid.txt", b"\xff\xfeLubo", "UTF-8"),
+            ("utf16.txt", "Lubo".encode("utf-16"), "NUL"),
+        )
+
+        for relative_path, content, expected_error in cases:
+            with self.subTest(relative_path=relative_path):
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    decode_tracked_text(relative_path, content)
+
+    def test_identity_scan_matches_forbidden_tokens_case_insensitively(self):
+        mixed_case_name = "dOuYiNlIvE" + "rEcOrDeR"
+
+        self.assertIn(
+            "old CamelCase application name",
+            identity_violations("mixed.txt", mixed_case_name),
+        )
+
+    def test_notice_allows_only_one_exact_historical_author_name(self):
+        self.assertNotIn(
+            "old author",
+            identity_violations(HISTORICAL_NOTICE_PATH, HISTORICAL_AUTHOR),
+        )
+        for content in (
+            HISTORICAL_AUTHOR + "\n" + HISTORICAL_AUTHOR,
+            HISTORICAL_AUTHOR + "\n" + "hM" + "IlY",
+        ):
+            with self.subTest(content=content):
+                self.assertIn(
+                    "old author",
+                    identity_violations(HISTORICAL_NOTICE_PATH, content),
+                )
+
+    def test_notice_does_not_exempt_other_forbidden_tokens(self):
+        mixed_case_name = "dOuYiNlIvE" + "rEcOrDeR"
+        content = HISTORICAL_AUTHOR + "\n" + mixed_case_name
+
+        self.assertIn(
+            "old CamelCase application name",
+            identity_violations(HISTORICAL_NOTICE_PATH, content),
         )
 
     def test_readme_is_complete_multi_platform_user_documentation(self):
@@ -512,7 +615,12 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("多平台", project["description"])
         self.assertEqual(project["authors"], [{"name": "zhangzhimiao1994"}])
         self.assertEqual(project["license"], {"text": "MIT"})
-        self.assertEqual(project["requires-python"], ">=3.10")
+        self.assertEqual(project["requires-python"], ">=3.10,<3.14")
+        candidate_versions = ("3.9", "3.10", "3.11", "3.12", "3.13", "3.14")
+        self.assertEqual(
+            versions_matching_specifier(project["requires-python"], candidate_versions),
+            ["3.10", "3.11", "3.12", "3.13"],
+        )
         self.assertEqual(
             project["dependencies"],
             ["streamlink==8.4.0", "yt-dlp==2026.6.9"],
@@ -531,31 +639,25 @@ class BuildScriptContractTests(unittest.TestCase):
             },
         )
 
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Python 3.10–3.13", readme)
+        for script in (self.windows_script, self.linux_script):
+            self.assertIn("Python 3.10-3.13", script)
+
     def test_current_and_historical_mit_notices_are_complete(self):
         license_text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
         notice = (REPO_ROOT / "THIRD_PARTY_NOTICES.md").read_text(
             encoding="utf-8"
         )
-        standard_terms = (
-            "Permission is hereby granted, free of charge, to any person obtaining "
-            "a copy"
+        self.assertEqual(
+            license_text,
+            mit_license("Copyright (c) 2026 zhangzhimiao1994"),
         )
-        disclaimer = 'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND'
-
-        self.assertTrue(license_text.startswith("MIT License\n\n"))
-        self.assertIn("Copyright (c) 2026 zhangzhimiao1994", license_text)
-        self.assertIn(standard_terms, license_text.replace("\n", " "))
-        self.assertIn(disclaimer, license_text.replace("\n", " "))
-
-        self.assertIn(
-            "Historical MIT notice retained for license compliance",
-            notice.splitlines()[0],
+        self.assertEqual(
+            notice,
+            "# Historical MIT notice retained for license compliance\n\n"
+            + mit_license("Copyright (c) 2025 " + HISTORICAL_AUTHOR),
         )
-        self.assertEqual(notice.count("MIT License"), 1)
-        self.assertEqual(notice.count("Copyright (c) 2025 " + "Hm" + "ily"), 1)
-        self.assertIn(standard_terms, notice.replace("\n", " "))
-        self.assertIn(disclaimer, notice.replace("\n", " "))
-        self.assertNotIn("github.com", notice)
 
     def test_platform_documentation_matches_registered_adapters(self):
         platforms = (REPO_ROOT / "docs" / "platforms.md").read_text(
