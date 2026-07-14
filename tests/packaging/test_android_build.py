@@ -73,6 +73,26 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertEqual(buildozer_version, distribution_version)
         self.assertEqual(entrypoint_version, distribution_version)
 
+    def test_prerelease_display_version_has_explicit_android_numeric_version(self):
+        parser = configparser.RawConfigParser()
+        parser.read_string(self.spec)
+        app = parser["app"]
+        display_version = app["version"]
+
+        self.assertRegex(display_version, r"[a-zA-Z]")
+        self.assertIn(
+            "android.numeric_version",
+            app,
+            "p4a must not derive versionCode from the prerelease display version",
+        )
+        numeric_version_text = app["android.numeric_version"]
+        self.assertRegex(numeric_version_text, r"^[1-9][0-9]*$")
+        numeric_version = int(numeric_version_text)
+        self.assertEqual(numeric_version, 20001)
+        self.assertGreaterEqual(numeric_version, 1)
+        self.assertLessEqual(numeric_version, 2_100_000_000)
+        self.assertNotEqual(numeric_version_text, display_version)
+
     def test_foreground_service_and_required_permissions_are_declared(self):
         self.assertIn(":foreground:sticky:foregroundServiceType=specialUse", self.spec)
         self.assertIn("FOREGROUND_SERVICE_SPECIAL_USE", self.spec)
