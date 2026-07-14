@@ -1,0 +1,65 @@
+name: Build Desktop Apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --no-progress -y
+          }
+
+      - name: Build Windows app
+        shell: pwsh
+        run: scripts/build_windows.ps1 -PythonExe (Get-Command python).Source
+
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DouyinLiveRecorder-windows
+          path: dist/DouyinLiveRecorder
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Linux runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libgl1 libgles2 libmtdev1
+
+      - name: Build Linux app
+        env:
+          PYTHON: ${{ env.pythonLocation }}/bin/python
+        run: bash scripts/build_linux.sh
+
+      - name: Upload Linux app
+        uses: actions/upload-artifact@v4
+        with:
+          name: DouyinLiveRecorder-linux
+          path: dist/DouyinLiveRecorder
+          if-no-files-found: error

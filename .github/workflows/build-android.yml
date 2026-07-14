@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Android build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake cmake git libffi-dev libltdl-dev \
+            libncurses5-dev libncursesw5-dev libssl-dev libtool \
+            openjdk-17-jdk pkg-config python3-pip python3-venv \
+            unzip zip zlib1g-dev
+
+      - name: Install Buildozer
+        run: |
+          python3 -m venv .venv-android
+          .venv-android/bin/pip install --upgrade pip setuptools wheel
+          .venv-android/bin/pip install \
+            "cython==0.29.34" \
+            "buildozer @ git+https://github.com/kivy/buildozer.git"
+
+      - name: Restore Android toolchain cache
+        uses: actions/cache@v4
+        with:
+          path: .android-build/project/.buildozer
+          key: android-buildozer-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
+          restore-keys: |
+            android-buildozer-${{ runner.os }}-
+
+      - name: Build debug APK
+        env:
+          BUILDOZER: ${{ github.workspace }}/.venv-android/bin/buildozer
+        run: bash scripts/build_android.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DouyinLiveRecorder-android-debug
+          path: dist/android/DouyinLiveRecorder-android-debug.apk
+          if-no-files-found: error
