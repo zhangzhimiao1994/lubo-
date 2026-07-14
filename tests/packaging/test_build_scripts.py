@@ -197,6 +197,21 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 12", self.desktop_workflow)
         self.assertIn("title=Windows build log", self.desktop_workflow)
 
+    def test_release_workflow_publishes_all_three_platform_artifacts(self):
+        workflow_path = REPO_ROOT / ".github" / "workflows" / "publish-release.yml"
+
+        self.assertTrue(workflow_path.is_file(), "A release publishing workflow is required")
+        workflow = workflow_path.read_text(encoding="utf-8")
+        self.assertIn("actions: read", workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertIn("Build Desktop Apps", workflow)
+        self.assertIn("Build Android APK", workflow)
+        self.assertIn("DouyinLiveRecorder-windows", workflow)
+        self.assertIn("DouyinLiveRecorder-linux", workflow)
+        self.assertIn("DouyinLiveRecorder-android-debug", workflow)
+        self.assertIn("gh release create", workflow)
+        self.assertIn("gh release upload", workflow)
+
     def test_readme_and_package_metadata_describe_the_refactored_project(self):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         metadata = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")

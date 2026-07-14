@@ -1,0 +1,137 @@
+name: Publish Release Assets
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/publish-release.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag whose successful build artifacts should be published
+        required: false
+        type: string
+  workflow_run:
+    workflows:
+      - Build Android APK
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag and successful build runs
+        id: release
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          tag="$REQUESTED_TAG"
+          if [[ -z "$tag" && -n "$WORKFLOW_RUN_SHA" ]]; then
+            tag="$(git tag --points-at "$WORKFLOW_RUN_SHA" --sort=-version:refname | head -n 1)"
+          fi
+          if [[ -z "$tag" ]]; then
+            tag="$(git tag --sort=-version:refname | head -n 1)"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9A-Za-z._-]+$ ]]; then
+            echo "Invalid or missing release tag: $tag" >&2
+            exit 1
+          fi
+
+          sha="$(git rev-list -n 1 "$tag")"
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$sha&per_page=100")"
+          desktop_run="$(
+            jq -r '
+              [.workflow_runs[]
+                | select(.name == "Build Desktop Apps")
+                | select(.status == "completed" and .conclusion == "success")]
+              | if length > 0 then .[0].id else empty end
+            ' <<<"$runs"
+          )"
+          android_run="$(
+            jq -r '
+              [.workflow_runs[]
+                | select(.name == "Build Android APK")
+                | select(.status == "completed" and .conclusion == "success")]
+              | if length > 0 then .[0].id else empty end
+            ' <<<"$runs"
+          )"
+          if [[ -z "$desktop_run" || -z "$android_run" ]]; then
+            echo "Successful desktop and Android runs are required for $tag ($sha)." >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "desktop_run=$desktop_run" >>"$GITHUB_OUTPUT"
+          echo "android_run=$android_run" >>"$GITHUB_OUTPUT"
+
+      - name: Download Windows, Linux, and Android artifacts
+        shell: bash
+        env:
+          DESKTOP_RUN: ${{ steps.release.outputs.desktop_run }}
+          ANDROID_RUN: ${{ steps.release.outputs.android_run }}
+        run: |
+          set -euo pipefail
+          gh run download "$DESKTOP_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name DouyinLiveRecorder-windows --dir stage/windows
+          gh run download "$DESKTOP_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name DouyinLiveRecorder-linux --dir stage/linux
+          gh run download "$ANDROID_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name DouyinLiveRecorder-android-debug --dir stage/android
+
+      - name: Prepare permanent release assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          (cd stage/windows && zip -q -r "../../release/Lubo-$RELEASE_TAG-windows.zip" .)
+          (cd stage/linux && zip -q -r "../../release/Lubo-$RELEASE_TAG-linux.zip" .)
+          apk="$(find stage/android -type f -name '*.apk' -print -quit)"
+          if [[ -z "$apk" ]]; then
+            echo "The Android artifact does not contain an APK." >&2
+            exit 1
+          fi
+          cp -- "$apk" "release/Lubo-$RELEASE_TAG-android-debug.apk"
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          assets=(release/*)
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            prerelease=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              prerelease=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Lubo $RELEASE_TAG" \
+              --notes "Windows、Linux 和 Android 构建文件。" \
+              "${prerelease[@]}"
+          fi
