@@ -34,7 +34,9 @@ jobs:
       - name: Restore Android toolchain cache
         uses: actions/cache@v4
         with:
-          path: .android-build/project/.buildozer
+          path: |
+            .android-build/project/.buildozer
+            ~/.buildozer
           key: android-buildozer-${{ runner.os }}-${{ hashFiles('android/buildozer.spec') }}
           restore-keys: |
             android-buildozer-${{ runner.os }}-
@@ -53,7 +55,7 @@ jobs:
         run: |
           log_tail="$(
             sed -E $'s/\033\\[[0-9;]*[mK]//g' android-build.log \
-              | grep -vE '^#     [A-Za-z_][A-Za-z0-9_]* = ' \
+              | grep -vE '^(#     |export )[A-Za-z_][A-Za-z0-9_]* ?=' \
               | tail -n 100
           )"
           log_tail="${log_tail//'%'/'%25'}"
