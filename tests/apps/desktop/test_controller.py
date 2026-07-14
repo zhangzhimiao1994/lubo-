@@ -80,9 +80,31 @@ class DesktopControllerTests(unittest.IsolatedAsyncioTestCase):
         modules["kivy.uix.label"].Label = KivyWidget
         modules["kivy.uix.scrollview"].ScrollView = KivyWidget
         modules["kivy.uix.textinput"].TextInput = KivyWidget
+        desktop_module_name = "lubo.apps.desktop.main"
+        desktop_package = importlib.import_module("lubo.apps.desktop")
+        tracked_module_names = (desktop_module_name, *modules)
+        saved_modules = {
+            name: sys.modules[name]
+            for name in tracked_module_names
+            if name in sys.modules
+        }
+        saved_package_main = desktop_package.__dict__.get("main")
+        had_package_main = "main" in desktop_package.__dict__
 
-        with patch.dict(sys.modules, modules):
-            return importlib.import_module("lubo.apps.desktop.main")
+        try:
+            for name in tracked_module_names:
+                sys.modules.pop(name, None)
+            sys.modules.update(modules)
+            desktop_package.__dict__.pop("main", None)
+            return importlib.import_module(desktop_module_name)
+        finally:
+            for name in tracked_module_names:
+                sys.modules.pop(name, None)
+            sys.modules.update(saved_modules)
+            if had_package_main:
+                desktop_package.main = saved_package_main
+            else:
+                desktop_package.__dict__.pop("main", None)
 
     def make_controller(self, url_file):
         config = AppConfig()
@@ -280,7 +302,47 @@ class DesktopControllerTests(unittest.IsolatedAsyncioTestCase):
             )
 
     def test_desktop_app_build_uses_default_registry_and_all_platform_cookies(self):
+        imported_module_names = (
+            "lubo.apps.desktop.main",
+            "kivy",
+            "kivy.app",
+            "kivy.clock",
+            "kivy.core",
+            "kivy.core.text",
+            "kivy.uix",
+            "kivy.uix.boxlayout",
+            "kivy.uix.button",
+            "kivy.uix.label",
+            "kivy.uix.scrollview",
+            "kivy.uix.textinput",
+        )
+        saved_modules = {
+            name: sys.modules[name]
+            for name in imported_module_names
+            if name in sys.modules
+        }
+        desktop_package = importlib.import_module("lubo.apps.desktop")
+        saved_package_main = desktop_package.__dict__.get("main")
+        had_package_main = "main" in desktop_package.__dict__
+        for name in imported_module_names:
+            sys.modules.pop(name, None)
+        desktop_package.__dict__.pop("main", None)
+
+        def restore_modules():
+            for name in imported_module_names:
+                sys.modules.pop(name, None)
+            sys.modules.update(saved_modules)
+            if had_package_main:
+                desktop_package.main = saved_package_main
+            else:
+                desktop_package.__dict__.pop("main", None)
+
+        self.addCleanup(restore_modules)
         desktop_main = self.import_desktop_main()
+
+        for name in imported_module_names:
+            self.assertNotIn(name, sys.modules)
+        self.assertNotIn("main", desktop_package.__dict__)
 
         cookies = {
             "douyin": "douyin-cookie",

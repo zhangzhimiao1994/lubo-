@@ -128,7 +128,12 @@ class HTTPStreamRecorder:
         url = stream.flv_url or stream.primary_url
         if not url:
             raise ValueError("stream has no recording URL")
-        if urlsplit(url).path.lower().endswith(".m3u8"):
+        is_selected_hls = (
+            not stream.flv_url
+            and bool(stream.hls_url)
+            and url == stream.hls_url
+        )
+        if is_selected_hls or urlsplit(url).path.lower().endswith(".m3u8"):
             raise UnsupportedStreamProtocolError(
                 "Android direct recorder does not support HLS streams"
             )

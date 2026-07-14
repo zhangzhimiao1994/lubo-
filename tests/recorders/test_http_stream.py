@@ -137,6 +137,47 @@ class HTTPStreamRecorderTests(unittest.TestCase):
             self.assertFalse(output_dir.exists())
             self.assertEqual(opener.requests, [])
 
+    def test_hls_manifest_without_extension_is_rejected_before_side_effects(self):
+        manifest_url = "https://pull.example/manifest?token=secret"
+        opener = FakeOpener(FakeResponse())
+        recorder = HTTPStreamRecorder(opener=opener)
+        stream = self.live_stream(
+            flv_url="",
+            primary_url=manifest_url,
+            hls_url=manifest_url,
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "missing"
+            with self.assertRaises(UnsupportedStreamProtocolError):
+                recorder.build_command(
+                    RecordingTarget(url="https://live.douyin.com/123"),
+                    stream,
+                    output_dir,
+                    RecorderOptions(),
+                )
+
+            self.assertFalse(output_dir.exists())
+            self.assertEqual(opener.requests, [])
+
+    def test_flv_url_takes_priority_over_matching_hls_primary_url(self):
+        manifest_url = "https://pull.example/manifest?token=secret"
+        recorder = HTTPStreamRecorder(opener=FakeOpener(FakeResponse()))
+        stream = self.live_stream(
+            flv_url="https://pull.example/live.flv",
+            primary_url=manifest_url,
+            hls_url=manifest_url,
+        )
+
+        command = recorder.build_command(
+            RecordingTarget(url="https://live.douyin.com/123"),
+            stream,
+            Path("downloads"),
+            RecorderOptions(),
+        )
+
+        self.assertEqual(command.url, stream.flv_url)
+
     def test_non_hls_path_with_m3u8_query_text_remains_supported(self):
         recorder = HTTPStreamRecorder(opener=FakeOpener(FakeResponse()))
         stream = self.live_stream(
