@@ -11,11 +11,7 @@ import java.nio.charset.StandardCharsets;
 public final class StopRecorderReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        File request = new File(context.getFilesDir(), "app/stop.request");
-        File parent = request.getParentFile();
-        if (parent != null) {
-            parent.mkdirs();
-        }
+        File request = new File(context.getFilesDir(), "stop.request");
         try (FileOutputStream output = new FileOutputStream(request, false)) {
             output.write("stop\n".getBytes(StandardCharsets.US_ASCII));
         } catch (IOException ignored) {

@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from lubo.apps.android.platform import STOP_REQUEST_FILE
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,6 +17,15 @@ class AndroidBuildContractTests(unittest.TestCase):
         cls.script = (REPO_ROOT / "scripts" / "build_android.sh").read_text(encoding="utf-8")
         cls.hook_path = REPO_ROOT / "android" / "p4a_hook.py"
         cls.hook = cls.hook_path.read_text(encoding="utf-8")
+        cls.receiver = (
+            REPO_ROOT
+            / "android"
+            / "java"
+            / "org"
+            / "lubo"
+            / "recorder"
+            / "StopRecorderReceiver.java"
+        ).read_text(encoding="utf-8")
         cls.workflow = (REPO_ROOT / ".github" / "workflows" / "build-android.yml").read_text(encoding="utf-8")
 
     def test_buildozer_uses_lubo_identity_and_pinned_runtime(self):
@@ -51,6 +62,35 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertIn("Lubo-android-debug.apk", self.script)
         self.assertIn("dist/android/Lubo-android-debug.apk", self.script)
         self.assertIn(".android-build/project/appsource", self.script)
+
+    def test_java_stop_marker_matches_python_storage_contract(self):
+        expected = f'new File(context.getFilesDir(), "{STOP_REQUEST_FILE}")'
+
+        self.assertIn(expected, self.receiver)
+        self.assertNotIn('"app/stop.request"', self.receiver)
+        self.assertNotIn("getParentFile()", self.receiver)
+        self.assertNotIn("mkdirs()", self.receiver)
+
+    def test_android_build_rebuilds_verified_bin_before_buildozer(self):
+        self.assertIn('BIN_DIR="$PROJECT_DIR/bin"', self.script)
+        self.assertIn(
+            'EXPECTED_BIN_DIR="$REPO_ROOT/.android-build/project/bin"',
+            self.script,
+        )
+        self.assertIn('"$BIN_DIR" != "$EXPECTED_BIN_DIR"', self.script)
+        self.assertIn('-L "$BIN_DIR"', self.script)
+
+        cleanup = self.script.index('rm -rf -- "$BIN_DIR"')
+        recreate = self.script.index('mkdir -p "$BIN_DIR"')
+        build = self.script.index('"$BUILDOZER_BIN" android debug')
+        self.assertLess(cleanup, recreate)
+        self.assertLess(recreate, build)
+
+    def test_android_build_requires_exactly_one_new_apk(self):
+        self.assertIn("mapfile -d '' APK_PATHS", self.script)
+        self.assertRegex(self.script, r'\$\{#APK_PATHS\[@\]\}\s+-ne\s+1')
+        self.assertIn('APK_PATH="${APK_PATHS[0]}"', self.script)
+        self.assertNotIn("-print -quit", self.script)
 
     def test_p4a_hook_inserts_manifest_children_once(self):
         patch_manifest_template = runpy.run_path(str(self.hook_path))[
