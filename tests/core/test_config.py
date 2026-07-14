@@ -1,3 +1,4 @@
+import configparser
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,20 +7,38 @@ from lubo.core.config import AppConfig, ConfigService
 from lubo.core.models import OutputFormat, Quality
 
 
+PLATFORM_KEYS = ("douyin", "bilibili", "huya", "douyu")
+
+
 class ConfigServiceTests(unittest.TestCase):
-    def test_loads_existing_chinese_config_keys(self):
+    def write_config(self, directory: str, content: str) -> Path:
+        path = Path(directory) / "config.ini"
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def test_loads_all_sections_and_only_supported_platform_cookies(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            path.write_text(
-                "[录制设置]\n"
-                "直播保存路径(不填则默认) = D:/videos\n"
-                "视频保存格式ts|mkv|flv|mp4|mp3音频|m4a音频 = mp4\n"
-                "原画|超清|高清|标清|流畅 = 高清\n"
-                "循环时间(秒) = 60\n"
-                "同一时间访问网络的线程数 = 2\n"
-                "是否使用代理ip(是/否) = 是\n"
-                "代理地址 = 127.0.0.1:7890\n",
-                encoding="utf-8-sig",
+            path = self.write_config(
+                tmp,
+                "[recorder]\n"
+                "save_path = D:/videos\n"
+                "output_format = mp4\n"
+                "quality = HIGH\n"
+                "split_enabled = no\n"
+                "split_seconds = 900\n"
+                "convert_to_mp4 = 0\n"
+                "[monitor]\n"
+                "loop_seconds = 60\n"
+                "max_concurrency = 2\n"
+                "[proxy]\n"
+                "enabled = yes\n"
+                "address = 127.0.0.1:7890\n"
+                "[cookies]\n"
+                "douyin = dy-cookie\n"
+                "bilibili = bili-cookie\n"
+                "huya = huya-cookie\n"
+                "douyu = douyu-cookie\n"
+                "future_platform = ignored\n",
             )
 
             config = ConfigService(path).load()
@@ -27,116 +46,181 @@ class ConfigServiceTests(unittest.TestCase):
             self.assertEqual(config.save_path, "D:/videos")
             self.assertEqual(config.output_format, OutputFormat.MP4)
             self.assertEqual(config.quality, Quality.HIGH)
+            self.assertFalse(config.split_enabled)
+            self.assertEqual(config.split_seconds, 900)
+            self.assertFalse(config.convert_to_mp4)
             self.assertEqual(config.loop_seconds, 60)
             self.assertEqual(config.max_concurrency, 2)
             self.assertTrue(config.use_proxy)
             self.assertEqual(config.proxy_addr, "127.0.0.1:7890")
-
-    def test_loads_douyin_cookie_from_cookie_section(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            path.write_text(
-                "[录制设置]\n"
-                "原画|超清|高清|标清|流畅 = 高清\n"
-                "[Cookie]\n"
-                "抖音cookie = sessionid=test-cookie; ttwid=test\n",
-                encoding="utf-8-sig",
+            self.assertEqual(
+                config.cookies,
+                {
+                    "douyin": "dy-cookie",
+                    "bilibili": "bili-cookie",
+                    "huya": "huya-cookie",
+                    "douyu": "douyu-cookie",
+                },
             )
 
-            config = ConfigService(path).load()
+    def test_loaded_cookies_are_immutable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_config(tmp, "[cookies]\ndouyin = dy-cookie\n")
 
-            self.assertEqual(config.douyin_cookie, "sessionid=test-cookie; ttwid=test")
+            cookies = ConfigService(path).load().cookies
 
-    def test_missing_file_returns_defaults_and_creates_file_on_save(self):
+            with self.assertRaises(TypeError):
+                cookies["douyin"] = "replacement"  # type: ignore[index]
+
+    def test_app_config_defensively_copies_cookies(self):
+        supplied = {"douyin": "original"}
+
+        config = AppConfig(cookies=supplied)
+        supplied["douyin"] = "changed"
+
+        self.assertEqual(config.cookies, {"douyin": "original"})
+        with self.assertRaises(TypeError):
+            config.cookies["douyin"] = "replacement"  # type: ignore[index]
+
+    def test_missing_file_returns_defaults_and_save_creates_new_schema(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "config.ini"
             service = ConfigService(path)
 
             config = service.load()
             service.save(config)
+
+            self.assertEqual(config.save_path, "")
+            self.assertEqual(config.output_format, OutputFormat.TS)
+            self.assertEqual(config.quality, Quality.ORIGINAL)
+            self.assertEqual(config.loop_seconds, 300)
+            self.assertEqual(config.max_concurrency, 3)
+            self.assertFalse(config.use_proxy)
+            self.assertEqual(config.proxy_addr, "")
+            self.assertTrue(config.split_enabled)
+            self.assertEqual(config.split_seconds, 1800)
+            self.assertTrue(config.convert_to_mp4)
+            self.assertEqual(config.cookies, dict.fromkeys(PLATFORM_KEYS, ""))
+            parser = configparser.ConfigParser()
+            parser.read(path, encoding="utf-8-sig")
+            self.assertEqual(parser.sections(), ["recorder", "monitor", "proxy", "cookies"])
+            self.assertEqual(tuple(parser["cookies"]), PLATFORM_KEYS)
+
+    def test_missing_cookie_values_are_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_config(tmp, "[cookies]\nhuya = set\n")
+
+            config = ConfigService(path).load()
+
+            self.assertEqual(
+                config.cookies,
+                {"douyin": "", "bilibili": "", "huya": "set", "douyu": ""},
+            )
+
+    def test_save_and_reload_preserves_all_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.ini"
+            service = ConfigService(path)
+            expected = AppConfig(
+                save_path="E:/recordings",
+                output_format=OutputFormat.MKV,
+                quality=Quality.ULTRA,
+                loop_seconds=45,
+                max_concurrency=5,
+                use_proxy=True,
+                proxy_addr="host:8080",
+                split_enabled=False,
+                split_seconds=600,
+                convert_to_mp4=False,
+                cookies={
+                    "douyin": "dy",
+                    "bilibili": "bili",
+                    "huya": "hy",
+                    "douyu": "doyu",
+                },
+            )
+
+            service.save(expected)
+
+            self.assertEqual(service.load(), expected)
+
+    def test_save_rewrites_existing_file_to_only_the_current_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_config(
+                tmp,
+                "[legacy]\ncredential = secret\n[cookies]\nfuture = remove-me\n",
+            )
+
+            ConfigService(path).save(AppConfig(cookies={"douyin": "dy"}))
+
+            parser = configparser.ConfigParser()
+            parser.read(path, encoding="utf-8-sig")
+            self.assertEqual(parser.sections(), ["recorder", "monitor", "proxy", "cookies"])
+            self.assertEqual(dict(parser["cookies"]), {
+                "douyin": "dy",
+                "bilibili": "",
+                "huya": "",
+                "douyu": "",
+            })
+
+    def test_quality_accepts_names_case_insensitively_and_enum_values(self):
+        cases = {
+            "original": Quality.ORIGINAL,
+            "BLUE_RAY": Quality.BLUE_RAY,
+            "Ultra": Quality.ULTRA,
+            "high": Quality.HIGH,
+            "STANDARD": Quality.STANDARD,
+            "smooth": Quality.SMOOTH,
+            Quality.HIGH.value: Quality.HIGH,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.ini"
+            for raw, expected in cases.items():
+                with self.subTest(raw=raw):
+                    path.write_text(f"[recorder]\nquality = {raw}\n", encoding="utf-8")
+                    self.assertEqual(ConfigService(path).load().quality, expected)
+
+    def test_boolean_spellings_are_case_insensitive(self):
+        true_values = ("true", "YES", "1")
+        false_values = ("false", "No", "0")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.ini"
+            for raw in true_values:
+                with self.subTest(raw=raw):
+                    path.write_text(f"[proxy]\nenabled = {raw}\n", encoding="utf-8")
+                    self.assertTrue(ConfigService(path).load().use_proxy)
+            for raw in false_values:
+                with self.subTest(raw=raw):
+                    path.write_text(f"[recorder]\nsplit_enabled = {raw}\n", encoding="utf-8")
+                    self.assertFalse(ConfigService(path).load().split_enabled)
+
+    def test_invalid_values_fall_back_to_field_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write_config(
+                tmp,
+                "[recorder]\n"
+                "output_format = wav\n"
+                "quality = impossible\n"
+                "split_enabled = maybe\n"
+                "split_seconds = soon\n"
+                "convert_to_mp4 = perhaps\n"
+                "[monitor]\n"
+                "loop_seconds = later\n"
+                "max_concurrency = many\n"
+                "[proxy]\n"
+                "enabled = sometimes\n",
+            )
+
+            config = ConfigService(path).load()
 
             self.assertEqual(config.output_format, OutputFormat.TS)
             self.assertEqual(config.quality, Quality.ORIGINAL)
-            self.assertTrue(path.exists())
-            content = path.read_text(encoding="utf-8-sig")
-            self.assertIn("录制设置", content)
-            self.assertIn("循环时间(秒)", content)
-
-    def test_save_updates_known_values(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            service = ConfigService(path)
-            service.save(AppConfig(save_path="E:/recordings", loop_seconds=30, use_proxy=True, proxy_addr="host:8080"))
-
-            reloaded = service.load()
-
-            self.assertEqual(reloaded.save_path, "E:/recordings")
-            self.assertEqual(reloaded.loop_seconds, 30)
-            self.assertTrue(reloaded.use_proxy)
-            self.assertEqual(reloaded.proxy_addr, "host:8080")
-
-    def test_save_preserves_comments_unknown_keys_and_unknown_sections(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            path.write_text(
-                "# top comment\n"
-                "[录制设置]\n"
-                "# keep this comment\n"
-                "循环时间(秒) = 60\n"
-                "MixedCaseKey = KeepMe\n"
-                "[Cookie]\n"
-                "B站cookie = abc\n"
-                "SMTP邮件服务器 = smtp.example.com\n",
-                encoding="utf-8-sig",
-            )
-            service = ConfigService(path)
-            config = service.load()
-            config.loop_seconds = 45
-
-            service.save(config)
-
-            content = path.read_text(encoding="utf-8-sig")
-            self.assertIn("# top comment", content)
-            self.assertIn("# keep this comment", content)
-            self.assertIn("MixedCaseKey = KeepMe", content)
-            self.assertIn("B站cookie = abc", content)
-            self.assertIn("SMTP邮件服务器 = smtp.example.com", content)
-            self.assertIn("循环时间(秒) = 45", content)
-
-    def test_save_appends_missing_known_key_before_next_section(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            path.write_text(
-                "[录制设置]\n"
-                "循环时间(秒) = 60\n"
-                "[Cookie]\n"
-                "B站cookie = abc\n",
-                encoding="utf-8-sig",
-            )
-            service = ConfigService(path)
-            config = service.load()
-            config.proxy_addr = "127.0.0.1:7890"
-
-            service.save(config)
-
-            content = path.read_text(encoding="utf-8-sig")
-            self.assertIn("代理地址 = 127.0.0.1:7890", content)
-            self.assertLess(content.index("代理地址 = 127.0.0.1:7890"), content.index("[Cookie]"))
-
-    def test_malformed_true_default_bools_keep_defaults(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "config.ini"
-            path.write_text(
-                "[录制设置]\n"
-                "分段录制是否开启 = maybe\n"
-                "录制完成后自动转为mp4格式 = maybe\n",
-                encoding="utf-8-sig",
-            )
-
-            config = ConfigService(path).load()
-
             self.assertTrue(config.split_enabled)
+            self.assertEqual(config.split_seconds, 1800)
             self.assertTrue(config.convert_to_mp4)
+            self.assertEqual(config.loop_seconds, 300)
+            self.assertEqual(config.max_concurrency, 3)
+            self.assertFalse(config.use_proxy)
 
 
 if __name__ == "__main__":

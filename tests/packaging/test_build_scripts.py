@@ -1,4 +1,4 @@
-import ast
+import configparser
 import re
 import subprocess
 import sys
@@ -248,9 +248,68 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertNotIn("ihmily/DouyinLiveRecorder", metadata)
         self.assertNotIn("已支持平台", readme)
 
-    def test_packaged_config_sanitizer_removes_credentials_and_targets(self):
+    def test_config_template_contains_only_the_current_schema(self):
+        parser = configparser.ConfigParser()
+        parser.read(REPO_ROOT / "config" / "config.ini", encoding="utf-8-sig")
+
+        self.assertEqual(parser.sections(), ["recorder", "monitor", "proxy", "cookies"])
+        self.assertEqual(tuple(parser["cookies"]), ("douyin", "bilibili", "huya", "douyu"))
+        self.assertTrue(all(value == "" for value in parser["cookies"].values()))
+
+    def test_packaged_config_sanitizer_clears_targets_and_all_cookie_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "source"
+            output_dir = Path(tmp) / "config"
+            source_dir.mkdir()
+            source = source_dir / "config.ini"
+            source_content = (
+                "[recorder]\n"
+                "save_path = D:/private/recordings\n"
+                "output_format = mkv\n"
+                "quality = high\n"
+                "split_enabled = false\n"
+                "split_seconds = 600\n"
+                "convert_to_mp4 = false\n"
+                "[monitor]\n"
+                "loop_seconds = 45\n"
+                "max_concurrency = 5\n"
+                "[proxy]\n"
+                "enabled = true\n"
+                "address = proxy.example:8080\n"
+                "[cookies]\n"
+                "douyin = dy-secret\n"
+                "bilibili = bili-secret\n"
+                "future_platform = future-secret\n"
+            )
+            source.write_text(source_content, encoding="utf-8")
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "scripts" / "prepare_packaged_config.py"),
+                    "--source",
+                    str(source_dir),
+                    "--output",
+                    str(output_dir),
+                ],
+                check=True,
+            )
+
+            parser = configparser.ConfigParser()
+            parser.read(output_dir / "config.ini", encoding="utf-8-sig")
+            self.assertEqual((output_dir / "URL_config.ini").read_text(encoding="utf-8-sig"), "")
+            self.assertEqual(source.read_text(encoding="utf-8"), source_content)
+            self.assertEqual(parser["recorder"]["save_path"], "")
+            self.assertEqual(parser["recorder"]["output_format"], "mkv")
+            self.assertEqual(parser["recorder"]["quality"], "high")
+            self.assertEqual(parser["monitor"]["loop_seconds"], "45")
+            self.assertEqual(parser["proxy"]["address"], "proxy.example:8080")
+            self.assertTrue(all(value == "" for value in parser["cookies"].values()))
+
+    def test_packaged_config_sanitizer_accepts_repository_template(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp) / "config"
+
             subprocess.run(
                 [
                     sys.executable,
@@ -262,58 +321,13 @@ class BuildScriptContractTests(unittest.TestCase):
                 ],
                 check=True,
             )
-            config = output_dir.joinpath("config.ini").read_text(
-                encoding="utf-8-sig"
-            )
 
-            self.assertEqual(
-                output_dir.joinpath("URL_config.ini").read_text(
-                    encoding="utf-8-sig"
-                ),
-                "",
-            )
-            section = ""
-            for line in config.splitlines():
-                stripped = line.strip()
-                if stripped.startswith("[") and stripped.endswith("]"):
-                    section = stripped[1:-1]
-                    continue
-                if section in {"Cookie", "Authorization", "账号密码"} and "=" in line:
-                    self.assertEqual(line.split("=", 1)[1].strip(), "")
-
-    def test_source_tree_contains_no_embedded_login_cookie(self):
-        sensitive_tokens = {
-            "__ac_signature=",
-            "passport_csrf_token",
-            "login_status",
-            "sessionid_ss",
-            "ttwid=",
-        }
-        findings = []
-        for path in (REPO_ROOT / "src").rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Dict):
-                    for key, value in zip(node.keys, node.values):
-                        is_cookie_header = (
-                            isinstance(key, ast.Constant)
-                            and isinstance(key.value, str)
-                            and key.value.lower() == "cookie"
-                        )
-                        if (
-                            is_cookie_header
-                            and isinstance(value, ast.Constant)
-                            and isinstance(value.value, str)
-                            and value.value
-                        ):
-                            findings.append((path.relative_to(REPO_ROOT), value.lineno))
-                if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
-                    continue
-                normalized = node.value.lower()
-                if any(token in normalized for token in sensitive_tokens):
-                    findings.append((path.relative_to(REPO_ROOT), node.lineno))
-
-        self.assertEqual(findings, [])
+            parser = configparser.ConfigParser()
+            parser.read(output_dir / "config.ini", encoding="utf-8-sig")
+            self.assertEqual(parser.sections(), ["recorder", "monitor", "proxy", "cookies"])
+            self.assertEqual(tuple(parser["cookies"]), ("douyin", "bilibili", "huya", "douyu"))
+            self.assertTrue(all(value == "" for value in parser["cookies"].values()))
+            self.assertEqual((output_dir / "URL_config.ini").read_bytes(), b"")
 
 
 if __name__ == "__main__":

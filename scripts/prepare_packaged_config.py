@@ -1,39 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import configparser
 from pathlib import Path
 
 
-SENSITIVE_SECTIONS = {"Cookie", "Authorization", "账号密码"}
-SAVE_PATH_KEY_PREFIX = "直播保存路径"
-
-
 def sanitize_config(source: Path, destination: Path) -> None:
-    content = source.read_text(encoding="utf-8-sig")
-    newline = "\r\n" if "\r\n" in content else "\n"
-    section = ""
-    sanitized: list[str] = []
-    for line in content.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            section = stripped[1:-1].strip()
-            sanitized.append(line)
-            continue
-        if "=" not in line:
-            sanitized.append(line)
-            continue
-        key = line.split("=", 1)[0].strip()
-        if section in SENSITIVE_SECTIONS or key.startswith(SAVE_PATH_KEY_PREFIX):
-            indentation = line[: len(line) - len(line.lstrip())]
-            sanitized.append(f"{indentation}{key} =")
-        else:
-            sanitized.append(line)
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(source, encoding="utf-8-sig")
+
+    if parser.has_option("recorder", "save_path"):
+        parser.set("recorder", "save_path", "")
+    if parser.has_section("cookies"):
+        for key in parser.options("cookies"):
+            parser.set("cookies", key, "")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
-        newline.join(sanitized) + newline,
-        encoding="utf-8-sig",
-    )
+    with destination.open("w", encoding="utf-8", newline="\n") as config_file:
+        parser.write(config_file)
 
 
 def main() -> None:
@@ -47,7 +31,7 @@ def main() -> None:
         args.output / "config.ini",
     )
     args.output.mkdir(parents=True, exist_ok=True)
-    (args.output / "URL_config.ini").write_text("", encoding="utf-8-sig")
+    (args.output / "URL_config.ini").write_bytes(b"")
 
 
 if __name__ == "__main__":
