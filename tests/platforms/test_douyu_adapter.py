@@ -107,6 +107,117 @@ class DouyuAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stream.flv_url, "")
         self.assertEqual(stream.hls_url, "")
 
+    async def test_does_not_fill_flv_url_from_lower_height_than_selected_http(self):
+        adapter = DouyuAdapter(
+            FakeBackend(
+                ResolverResult(
+                    is_live=True,
+                    streams=(
+                        ResolverStream(
+                            "https://pull.example/live-1080.mp4",
+                            "http",
+                            "1080p",
+                            1080,
+                            {"User-Agent": "http-agent", "X-Selected": "1080"},
+                        ),
+                        ResolverStream(
+                            "https://pull.example/live-720.flv",
+                            "flv",
+                            "720p",
+                            720,
+                            {"User-Agent": "low-flv-agent"},
+                        ),
+                    ),
+                )
+            )
+        )
+
+        stream = await adapter.resolve(
+            RecordingTarget(url="https://www.douyu.com/123"),
+            ResolveContext(quality=Quality.HIGH),
+        )
+
+        self.assertEqual(stream.primary_url, "https://pull.example/live-1080.mp4")
+        self.assertEqual(stream.flv_url, "")
+        self.assertEqual(stream.hls_url, "")
+        self.assertEqual(
+            dict(stream.headers),
+            {
+                "User-Agent": "http-agent",
+                "X-Selected": "1080",
+                "Referer": "https://www.douyu.com/",
+            },
+        )
+
+    async def test_does_not_fill_flv_url_from_lower_height_than_selected_hls(self):
+        adapter = DouyuAdapter(
+            FakeBackend(
+                ResolverResult(
+                    is_live=True,
+                    streams=(
+                        ResolverStream(
+                            "https://pull.example/live-1080.m3u8",
+                            "hls",
+                            "1080p",
+                            1080,
+                            {"User-Agent": "hls-agent"},
+                        ),
+                        ResolverStream(
+                            "https://pull.example/live-720.flv",
+                            "flv",
+                            "720p",
+                            720,
+                        ),
+                    ),
+                )
+            )
+        )
+
+        stream = await adapter.resolve(
+            RecordingTarget(url="https://www.douyu.com/123"),
+            ResolveContext(quality=Quality.HIGH),
+        )
+
+        self.assertEqual(stream.primary_url, "https://pull.example/live-1080.m3u8")
+        self.assertEqual(stream.flv_url, "")
+        self.assertEqual(stream.hls_url, "https://pull.example/live-1080.m3u8")
+        self.assertEqual(
+            dict(stream.headers),
+            {
+                "User-Agent": "hls-agent",
+                "Referer": "https://www.douyu.com/",
+            },
+        )
+
+    async def test_unknown_height_does_not_fill_url_from_another_candidate(self):
+        adapter = DouyuAdapter(
+            FakeBackend(
+                ResolverResult(
+                    is_live=True,
+                    streams=(
+                        ResolverStream(
+                            "https://pull.example/selected",
+                            "http",
+                            headers={"X-Selected": "unknown-height"},
+                        ),
+                        ResolverStream(
+                            "https://pull.example/other.m3u8",
+                            "hls",
+                        ),
+                    ),
+                )
+            )
+        )
+
+        stream = await adapter.resolve(
+            RecordingTarget(url="https://www.douyu.com/123"), ResolveContext()
+        )
+
+        self.assertEqual(stream.primary_url, "https://pull.example/selected")
+        self.assertEqual(stream.flv_url, "")
+        self.assertEqual(stream.hls_url, "")
+        self.assertEqual(stream.headers["X-Selected"], "unknown-height")
+
 
 if __name__ == "__main__":
     unittest.main()

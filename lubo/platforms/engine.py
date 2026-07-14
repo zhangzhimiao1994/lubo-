@@ -69,14 +69,15 @@ def _protocol_url(
     protocol: str,
     selected: ResolverStream,
 ) -> str:
-    candidates = tuple(
-        stream
-        for stream in streams
-        if stream.url and stream.protocol.lower() == protocol
-    )
-    if not candidates:
+    if selected.url and selected.protocol.lower() == protocol:
+        return selected.url
+    if selected.height is None:
         return ""
-    for stream in candidates:
-        if stream.height == selected.height:
+    for stream in streams:
+        if (
+            stream.url
+            and stream.protocol.lower() == protocol
+            and stream.height == selected.height
+        ):
             return stream.url
-    return candidates[0].url
+    return ""
