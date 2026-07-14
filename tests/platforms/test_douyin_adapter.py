@@ -3,119 +3,115 @@ import unittest
 from lubo.core.models import Quality, RecordingTarget
 from lubo.platforms.base import ResolveContext
 from lubo.platforms.douyin import DouyinAdapter
+from lubo.resolvers.base import ResolverResult, ResolverStream
 
 
-async def fake_web_fetch(url: str, proxy_addr: str, cookies: str):
-    return {"status": 2, "anchor_name": "主播A", "title": "直播标题", "source": "web"}
-
-
-async def fake_app_fetch(url: str, proxy_addr: str, cookies: str):
-    return {"status": 2, "anchor_name": "主播B", "title": "直播标题", "source": "app"}
-
-
-async def fake_stream_resolve(json_data: dict, video_quality: str, proxy_addr: str):
-    return {
-        "anchor_name": json_data["anchor_name"],
-        "is_live": True,
-        "title": json_data["title"],
-        "quality": video_quality,
-        "record_url": "https://pull.example/live.m3u8",
-        "flv_url": "https://pull.example/live.flv",
-        "m3u8_url": "https://pull.example/live.m3u8",
-    }
-
-
-class FetchRecorder:
-    def __init__(self, source: str):
-        self.source = source
+class FakeBackend:
+    def __init__(self, result=None):
+        self.result = result or ResolverResult(
+            anchor_name="anchor-a",
+            title="live-title",
+            is_live=True,
+            streams=(
+                ResolverStream(
+                    url="https://pull.example/live.m3u8",
+                    protocol="hls",
+                    quality_name="1080p",
+                    height=1080,
+                ),
+                ResolverStream(
+                    url="https://pull.example/live.flv",
+                    protocol="flv",
+                    quality_name="1080p",
+                    height=1080,
+                ),
+            ),
+        )
         self.calls = []
 
-    async def __call__(self, url: str, proxy_addr: str, cookies: str):
-        self.calls.append({"url": url, "proxy_addr": proxy_addr, "cookies": cookies})
-        return {"status": 2, "anchor_name": self.source, "title": "title", "source": self.source}
-
-
-class StreamRecorder:
-    def __init__(self):
-        self.calls = []
-
-    async def __call__(self, json_data: dict, video_quality: str, proxy_addr: str):
-        self.calls.append({"json_data": json_data, "video_quality": video_quality, "proxy_addr": proxy_addr})
-        return {
-            "anchor_name": json_data["anchor_name"],
-            "is_live": True,
-            "title": json_data["title"],
-            "record_url": "https://pull.example/live.m3u8",
-        }
+    async def resolve(self, url, *, proxy_addr="", cookies="", headers=None):
+        self.calls.append(
+            {
+                "url": url,
+                "proxy_addr": proxy_addr,
+                "cookies": cookies,
+                "headers": headers,
+            }
+        )
+        return self.result
 
 
 class DouyinAdapterTests(unittest.IsolatedAsyncioTestCase):
-    def test_matches_supported_hosts(self):
-        adapter = DouyinAdapter(fake_web_fetch, fake_app_fetch, fake_stream_resolve)
+    def test_matches_only_supported_hosts(self):
+        adapter = DouyinAdapter(FakeBackend())
 
-        self.assertTrue(adapter.matches("https://live.douyin.com/123"))
-        self.assertTrue(adapter.matches("https://live.douyin.com:443/123"))
-        self.assertTrue(adapter.matches("https://live.douyin.com"))
-        self.assertTrue(adapter.matches("live.douyin.com"))
-        self.assertTrue(adapter.matches("https://v.douyin.com/abc"))
-        self.assertTrue(adapter.matches("https://v.douyin.com"))
-        self.assertTrue(adapter.matches("v.douyin.com"))
-        self.assertTrue(adapter.matches("https://www.douyin.com/user/example"))
-        self.assertTrue(adapter.matches("https://www.douyin.com"))
-        self.assertTrue(adapter.matches("www.douyin.com"))
-        self.assertFalse(adapter.matches("https://live.bilibili.com/1"))
-        self.assertFalse(adapter.matches("https://example.com/live.douyin.com/123"))
+        for url in (
+            "https://live.douyin.com/123",
+            "live.douyin.com/123",
+            "https://v.douyin.com/abc",
+            "https://www.douyin.com/user/example",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(adapter.matches(url))
 
-    async def test_resolves_web_live_room(self):
-        adapter = DouyinAdapter(fake_web_fetch, fake_app_fetch, fake_stream_resolve)
+        for url in (
+            "https://douyin.com/123",
+            "https://live.bilibili.com/1",
+            "https://example.com/live.douyin.com/123",
+            "https://[invalid",
+            "",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(adapter.matches(url))
+
+    async def test_resolves_with_platform_context_and_prefers_flv(self):
+        backend = FakeBackend()
+        adapter = DouyinAdapter(backend)
         target = RecordingTarget(url="https://live.douyin.com/123", quality=Quality.HIGH)
-
-        info = await adapter.resolve(
-            target,
-            ResolveContext(quality=Quality.HIGH, proxy_addr="127.0.0.1:7890", cookies={"douyin": "cookie"}),
+        context = ResolveContext(
+            quality=Quality.HIGH,
+            proxy_addr="http://127.0.0.1:7890",
+            cookies={"douyin": "sessionid=douyin"},
         )
 
-        self.assertTrue(info.is_live)
-        self.assertEqual(info.platform_key, "douyin")
-        self.assertEqual(info.anchor_name, "主播A")
-        self.assertEqual(info.primary_url, "https://pull.example/live.m3u8")
-        self.assertEqual(info.flv_url, "https://pull.example/live.flv")
+        stream = await adapter.resolve(target, context)
 
-    async def test_resolves_share_link_with_app_fetcher(self):
-        adapter = DouyinAdapter(fake_web_fetch, fake_app_fetch, fake_stream_resolve)
-        target = RecordingTarget(url="https://V.DOUYIN.COM/abc")
-
-        info = await adapter.resolve(target, ResolveContext())
-
-        self.assertEqual(info.anchor_name, "主播B")
-
-    async def test_resolves_user_link_with_app_fetcher(self):
-        web_fetcher = FetchRecorder("web")
-        app_fetcher = FetchRecorder("app")
-        adapter = DouyinAdapter(web_fetcher, app_fetcher, fake_stream_resolve)
-        target = RecordingTarget(url="https://www.douyin.com/USER/example")
-
-        await adapter.resolve(target, ResolveContext())
-
-        self.assertEqual(web_fetcher.calls, [])
-        self.assertEqual(app_fetcher.calls[0]["url"], target.url)
-
-    async def test_resolve_passes_proxy_cookie_and_quality_to_fetchers(self):
-        web_fetcher = FetchRecorder("web")
-        app_fetcher = FetchRecorder("app")
-        stream_resolver = StreamRecorder()
-        adapter = DouyinAdapter(web_fetcher, app_fetcher, stream_resolver)
-        target = RecordingTarget(url="https://live.douyin.com/123")
-
-        await adapter.resolve(
-            target,
-            ResolveContext(quality=Quality.ULTRA, proxy_addr="127.0.0.1:7890", cookies={"douyin": "session=abc"}),
+        self.assertEqual(stream.platform_key, "douyin")
+        self.assertEqual(stream.platform_name, "Douyin")
+        self.assertEqual(stream.anchor_name, "anchor-a")
+        self.assertEqual(stream.title, "live-title")
+        self.assertTrue(stream.is_live)
+        self.assertEqual(stream.quality, Quality.HIGH)
+        self.assertEqual(stream.primary_url, "https://pull.example/live.flv")
+        self.assertEqual(stream.flv_url, "https://pull.example/live.flv")
+        self.assertEqual(stream.hls_url, "https://pull.example/live.m3u8")
+        self.assertEqual(stream.headers["Referer"], "https://live.douyin.com/")
+        self.assertEqual(
+            backend.calls,
+            [
+                {
+                    "url": target.url,
+                    "proxy_addr": "http://127.0.0.1:7890",
+                    "cookies": "sessionid=douyin",
+                    "headers": {"Referer": "https://live.douyin.com/"},
+                }
+            ],
         )
 
-        self.assertEqual(web_fetcher.calls, [{"url": target.url, "proxy_addr": "127.0.0.1:7890", "cookies": "session=abc"}])
-        self.assertEqual(app_fetcher.calls, [])
-        self.assertEqual(stream_resolver.calls[0]["video_quality"], "UHD")
-        self.assertEqual(stream_resolver.calls[0]["proxy_addr"], "127.0.0.1:7890")
+    async def test_offline_result_with_no_streams_does_not_select_a_stream(self):
+        backend = FakeBackend(
+            ResolverResult(anchor_name="anchor-a", title="offline", is_live=False)
+        )
+        adapter = DouyinAdapter(backend)
+
+        stream = await adapter.resolve(
+            RecordingTarget(url="https://live.douyin.com/123"), ResolveContext()
+        )
+
+        self.assertFalse(stream.is_live)
+        self.assertEqual(stream.primary_url, "")
+        self.assertEqual(stream.flv_url, "")
+        self.assertEqual(stream.hls_url, "")
 
 
 if __name__ == "__main__":

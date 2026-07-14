@@ -7,7 +7,7 @@ from pathlib import Path
 from lubo.core.events import EventBus, RecorderEventType
 from lubo.core.models import Quality, RecordingStatus, RecordingTarget, StreamInfo
 from lubo.core.scheduler import RecordingScheduler, SchedulerConfig
-from lubo.platforms.base import ResolveContext
+from lubo.platforms.base import ResolveContext, UnsupportedPlatformError
 from lubo.platforms.registry import PlatformRegistry
 
 
@@ -307,12 +307,51 @@ class SchedulerTests(unittest.IsolatedAsyncioTestCase):
         recorder = FakeRecorder()
         scheduler = self.make_scheduler(recorder=recorder, bus=bus)
         target = RecordingTarget(url="https://example.com/123")
+        failures = []
+        fail_task = scheduler._fail_task
+
+        def capture_failure(failed_target, event_type, exc):
+            failures.append((failed_target, event_type, exc))
+            fail_task(failed_target, event_type, exc)
+
+        scheduler._fail_task = capture_failure
 
         await scheduler.check_once([target])
 
         self.assertEqual(recorder.commands, [])
         self.assertNotIn(target.id, scheduler._processes)
         self.assertEqual([event.type for event in events], [RecorderEventType.ERROR])
+        self.assertEqual(len(failures), 1)
+        self.assertIsInstance(failures[0][2], UnsupportedPlatformError)
+        self.assertEqual(scheduler.tasks[target.id].last_error, "Unsupported platform URL")
+        self.assertNotIn(target.url, scheduler.tasks[target.id].last_error)
+
+    async def test_unsupported_target_does_not_block_supported_target(self):
+        bus = EventBus()
+        events = []
+        bus.subscribe(events.append)
+        recorder = FakeRecorder()
+        scheduler = self.make_scheduler(recorder=recorder, bus=bus)
+        unsupported = RecordingTarget(url="https://example.com/unknown")
+        supported = RecordingTarget(url="https://live.douyin.com/123")
+
+        await scheduler.check_once([unsupported, supported])
+
+        self.assertEqual(
+            scheduler.tasks[unsupported.id].status, RecordingStatus.ERROR
+        )
+        self.assertEqual(
+            scheduler.tasks[supported.id].status, RecordingStatus.RECORDING
+        )
+        unsupported_events = [
+            event.type for event in events if event.target_id == unsupported.id
+        ]
+        supported_events = [
+            event.type for event in events if event.target_id == supported.id
+        ]
+        self.assertEqual(unsupported_events, [RecorderEventType.ERROR])
+        self.assertIn(RecorderEventType.RECORDING_STARTED, supported_events)
+        self.assertNotIn(RecorderEventType.ERROR, supported_events)
 
     async def test_offline_stream_publishes_offline_and_leaves_task_idle(self):
         bus = EventBus()

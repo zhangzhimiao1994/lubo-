@@ -7,6 +7,11 @@ from typing import Mapping, Protocol
 from lubo.core.models import Quality, RecordingTarget, StreamInfo
 
 
+class UnsupportedPlatformError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("Unsupported platform URL")
+
+
 @dataclass(frozen=True, slots=True)
 class ResolveContext:
     quality: Quality = Quality.ORIGINAL

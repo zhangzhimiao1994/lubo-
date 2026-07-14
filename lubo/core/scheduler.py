@@ -9,7 +9,7 @@ from typing import Any
 
 from lubo.core.events import EventBus, RecorderEvent, RecorderEventType
 from lubo.core.models import OutputFormat, Quality, RecordingStatus, RecordingTarget, RecordingTask
-from lubo.platforms.base import ResolveContext
+from lubo.platforms.base import ResolveContext, UnsupportedPlatformError
 from lubo.platforms.registry import PlatformRegistry
 from lubo.recorders.ffmpeg import RecorderOptions
 
@@ -203,10 +203,8 @@ class RecordingScheduler:
         task = self._tasks.setdefault(target.id, RecordingTask(target=target))
         adapter = self.registry.match(target.url)
         if adapter is None:
-            task.status = RecordingStatus.ERROR
-            task.last_error = "unsupported URL"
-            self.event_bus.publish(
-                RecorderEvent(type=RecorderEventType.ERROR, target_id=target.id, message="unsupported URL")
+            self._fail_task(
+                target, RecorderEventType.ERROR, UnsupportedPlatformError()
             )
             return
         task.status = RecordingStatus.RESOLVING

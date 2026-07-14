@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import patch
 
 from lubo.core.models import RecordingTarget, StreamInfo
 from lubo.platforms.base import PlatformAdapter, ResolveContext
+from lubo.platforms.factory import build_default_registry
 from lubo.platforms.registry import PlatformRegistry
 
 
@@ -55,6 +57,51 @@ class RegistryTests(unittest.TestCase):
         adapters.clear()
 
         self.assertIsNotNone(registry.match("https://example.com/live"))
+
+    def test_default_factory_uses_injected_backends_in_required_order(self):
+        class FalsyBackend:
+            def __bool__(self):
+                return False
+
+        streamlink_backend = FalsyBackend()
+        yt_dlp_backend = FalsyBackend()
+
+        registry = build_default_registry(
+            streamlink_backend=streamlink_backend,
+            yt_dlp_backend=yt_dlp_backend,
+        )
+
+        self.assertEqual(
+            [adapter.key for adapter in registry.adapters],
+            ["douyin", "bilibili", "huya", "douyu"],
+        )
+        self.assertTrue(
+            all(
+                adapter.backend is streamlink_backend
+                for adapter in registry.adapters[:3]
+            )
+        )
+        self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
+
+    @patch("lubo.platforms.factory.YtDlpBackend")
+    @patch("lubo.platforms.factory.StreamlinkBackend")
+    def test_default_factory_instantiates_each_backend_once(
+        self, streamlink_backend_class, yt_dlp_backend_class
+    ):
+        streamlink_backend = streamlink_backend_class.return_value
+        yt_dlp_backend = yt_dlp_backend_class.return_value
+
+        registry = build_default_registry()
+
+        streamlink_backend_class.assert_called_once_with()
+        yt_dlp_backend_class.assert_called_once_with()
+        self.assertTrue(
+            all(
+                adapter.backend is streamlink_backend
+                for adapter in registry.adapters[:3]
+            )
+        )
+        self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
 
 
 if __name__ == "__main__":
