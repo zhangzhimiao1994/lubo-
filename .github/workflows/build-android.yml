@@ -51,7 +51,11 @@ jobs:
       - name: Report Android build failure
         if: steps.build.outcome == 'failure'
         run: |
-          log_tail="$(tail -n 80 android-build.log)"
+          log_tail="$(
+            sed -E $'s/\033\\[[0-9;]*[mK]//g' android-build.log \
+              | grep -vE '^#     [A-Za-z_][A-Za-z0-9_]* = ' \
+              | tail -n 100
+          )"
           log_tail="${log_tail//'%'/'%25'}"
           log_tail="${log_tail//$'\r'/'%0D'}"
           log_tail="${log_tail//$'\n'/'%0A'}"
