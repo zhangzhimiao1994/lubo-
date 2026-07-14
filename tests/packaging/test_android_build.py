@@ -31,7 +31,8 @@ class AndroidBuildContractTests(unittest.TestCase):
         self.assertIn("scripts/build_android.sh", self.workflow)
         self.assertIn("set -o pipefail", self.workflow)
         self.assertIn("title=Android build log", self.workflow)
-        self.assertIn('.venv-android/bin" >> "$GITHUB_PATH', self.workflow)
+        self.assertIn("PYTHONUSERBASE", self.workflow)
+        self.assertIn('.android-user/bin" >> "$GITHUB_PATH', self.workflow)
         self.assertIn("actions/upload-artifact@v4", self.workflow)
         self.assertIn("dist/android/DouyinLiveRecorder-android-debug.apk", self.workflow)
 

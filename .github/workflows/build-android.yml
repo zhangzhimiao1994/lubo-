@@ -24,12 +24,12 @@ jobs:
 
       - name: Install Buildozer
         run: |
-          python3 -m venv .venv-android
-          .venv-android/bin/pip install --upgrade pip setuptools wheel
-          .venv-android/bin/pip install \
+          echo "PYTHONUSERBASE=$GITHUB_WORKSPACE/.android-user" >> "$GITHUB_ENV"
+          PYTHONUSERBASE="$GITHUB_WORKSPACE/.android-user" \
+            python3 -m pip install --user --break-system-packages \
             "cython==0.29.34" \
             "buildozer @ git+https://github.com/kivy/buildozer.git"
-          echo "$GITHUB_WORKSPACE/.venv-android/bin" >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/.android-user/bin" >> "$GITHUB_PATH"
 
       - name: Restore Android toolchain cache
         uses: actions/cache@v4
@@ -43,7 +43,7 @@ jobs:
         id: build
         continue-on-error: true
         env:
-          BUILDOZER: ${{ github.workspace }}/.venv-android/bin/buildozer
+          BUILDOZER: ${{ github.workspace }}/.android-user/bin/buildozer
         run: |
           set -o pipefail
           bash scripts/build_android.sh 2>&1 | tee android-build.log

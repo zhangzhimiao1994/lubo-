@@ -14,7 +14,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 if ! command -v "$BUILDOZER_BIN" >/dev/null 2>&1; then
-    echo "Buildozer was not found. Install it in a virtual environment or set BUILDOZER." >&2
+    echo "Buildozer was not found. Add it to PATH or set BUILDOZER." >&2
     exit 1
 fi
 if [[ "$SOURCE_DIR" != "$EXPECTED_SOURCE_DIR" || -L "$BUILD_ROOT" || -L "$PROJECT_DIR" || -L "$SOURCE_DIR" ]]; then
