@@ -39,9 +39,22 @@ jobs:
             android-buildozer-${{ runner.os }}-
 
       - name: Build debug APK
+        id: build
+        continue-on-error: true
         env:
           BUILDOZER: ${{ github.workspace }}/.venv-android/bin/buildozer
-        run: bash scripts/build_android.sh
+        run: bash scripts/build_android.sh 2>&1 | tee android-build.log
+
+      - name: Report Android build failure
+        if: steps.build.outcome == 'failure'
+        run: |
+          {
+            echo '## Android build failure'
+            echo '```text'
+            tail -n 200 android-build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
