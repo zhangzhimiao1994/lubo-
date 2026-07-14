@@ -6,6 +6,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+$env:KIVY_LOG_MODE = "PYTHON"
+$env:KIVY_NO_FILELOG = "1"
+
+function Write-BuildPhase {
+    param([Parameter(Mandatory = $true)][string]$Message)
+
+    Write-Host "==> $Message"
+    if ($env:GITHUB_ACTIONS -eq "true") {
+        Write-Host "::notice title=Windows build phase::$Message"
+    }
+}
 
 function Resolve-PythonCommand {
     param([Parameter(Mandatory = $true)][string]$Candidate)
@@ -113,6 +124,7 @@ Write-Host "Using base Python $($PythonInfo.Version) at $BasePython"
 
 Push-Location -LiteralPath $RepoRoot
 try {
+    Write-BuildPhase "Preparing isolated build environment"
     $EntryPoint = "douyinliverecorder/apps/desktop/main.py"
     $ResourceDirectories = @("config", "i18n", "src/javascript")
     $BuildVenvRoot = Join-Path $RepoRoot ".build-venv"
@@ -239,6 +251,7 @@ try {
     Write-Host "Using build Python $($BuildPythonInfo.Version) at $BuildPython"
 
     if (-not $SkipInstall) {
+        Write-BuildPhase "Installing Python dependencies"
         if (-not (Test-Path -LiteralPath "requirements-gui.txt" -PathType Leaf)) {
             throw "Requirements file not found: requirements-gui.txt"
         }
@@ -256,6 +269,7 @@ try {
     }
     $FFmpegPath = $FFmpegCommand.Source
     Write-Host "Bundling FFmpeg from $FFmpegPath"
+    Write-BuildPhase "Preparing packaged configuration"
     $PackagedConfig = "build/package-config"
     & $BuildPython scripts/prepare_packaged_config.py `
         --source config `
@@ -264,6 +278,7 @@ try {
         throw "Packaged configuration preparation failed with exit code $LASTEXITCODE."
     }
 
+    Write-BuildPhase "Running PyInstaller"
     & $BuildPython -m PyInstaller `
         --noconfirm `
         --clean `
@@ -282,6 +297,7 @@ try {
         throw "PyInstaller failed with exit code $LASTEXITCODE."
     }
 
+    Write-BuildPhase "Verifying packaged output"
     $DistPath = Join-Path $RepoRoot "dist/DouyinLiveRecorder"
     if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) {
         throw "Expected build output not found: $DistPath"

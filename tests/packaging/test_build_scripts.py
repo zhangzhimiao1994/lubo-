@@ -137,6 +137,15 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("kivy.core.image.img_sdl2", hook)
         self.assertIn("kivy.core.clipboard.clipboard_winctypes", hook)
 
+    def test_desktop_build_keeps_kivy_from_amplifying_pyinstaller_logs(self):
+        self.assertIn('$env:KIVY_LOG_MODE = "PYTHON"', self.windows_script)
+        self.assertIn('$env:KIVY_NO_FILELOG = "1"', self.windows_script)
+        self.assertIn('title=Windows build phase', self.windows_script)
+        self.assertRegex(
+            self.linux_script,
+            r'KIVY_LOG_MODE=PYTHON\s+\\\s*KIVY_NO_FILELOG=1',
+        )
+
     def test_build_venv_is_ignored_once(self):
         matches = [
             line

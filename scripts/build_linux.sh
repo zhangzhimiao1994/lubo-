@@ -166,6 +166,8 @@ PACKAGED_CONFIG="build/package-config"
     --source config \
     --output "$PACKAGED_CONFIG"
 
+KIVY_LOG_MODE=PYTHON \
+KIVY_NO_FILELOG=1 \
 "$BUILD_PYTHON" -m PyInstaller \
     --noconfirm \
     --clean \
