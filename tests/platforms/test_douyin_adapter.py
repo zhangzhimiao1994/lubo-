@@ -4,6 +4,7 @@ from lubo.core.models import Quality, RecordingTarget
 from lubo.platforms.base import ResolveContext
 from lubo.platforms.douyin import DouyinAdapter
 from lubo.resolvers.base import ResolverResult, ResolverStream
+from lubo.resolvers.douyin_web_backend import DouyinWebBackend
 
 
 class FakeBackend:
@@ -42,6 +43,9 @@ class FakeBackend:
 
 
 class DouyinAdapterTests(unittest.IsolatedAsyncioTestCase):
+    def test_default_backend_uses_douyin_page_parser(self):
+        self.assertIsInstance(DouyinAdapter().backend, DouyinWebBackend)
+
     def test_matches_only_supported_hosts(self):
         adapter = DouyinAdapter(FakeBackend())
 

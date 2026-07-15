@@ -63,10 +63,12 @@ class RegistryTests(unittest.TestCase):
             def __bool__(self):
                 return False
 
+        douyin_backend = FalsyBackend()
         streamlink_backend = FalsyBackend()
         yt_dlp_backend = FalsyBackend()
 
         registry = build_default_registry(
+            douyin_backend=douyin_backend,
             streamlink_backend=streamlink_backend,
             yt_dlp_backend=yt_dlp_backend,
         )
@@ -75,37 +77,43 @@ class RegistryTests(unittest.TestCase):
             [adapter.key for adapter in registry.adapters],
             ["douyin", "bilibili", "huya", "douyu"],
         )
-        self.assertTrue(
-            all(
-                adapter.backend is streamlink_backend
-                for adapter in registry.adapters[:3]
-            )
-        )
+        self.assertIs(registry.adapters[0].backend, douyin_backend)
+        self.assertTrue(all(
+            adapter.backend is streamlink_backend
+            for adapter in registry.adapters[1:3]
+        ))
         self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
 
+    @patch("lubo.platforms.factory.DouyinWebBackend")
     @patch("lubo.platforms.factory.YtDlpBackend")
     @patch("lubo.platforms.factory.StreamlinkBackend")
     def test_default_factory_instantiates_each_backend_once(
-        self, streamlink_backend_class, yt_dlp_backend_class
+        self,
+        streamlink_backend_class,
+        yt_dlp_backend_class,
+        douyin_backend_class,
     ):
+        douyin_backend = douyin_backend_class.return_value
         streamlink_backend = streamlink_backend_class.return_value
         yt_dlp_backend = yt_dlp_backend_class.return_value
 
         registry = build_default_registry()
 
+        douyin_backend_class.assert_called_once_with()
         streamlink_backend_class.assert_called_once_with()
         yt_dlp_backend_class.assert_called_once_with()
-        self.assertTrue(
-            all(
-                adapter.backend is streamlink_backend
-                for adapter in registry.adapters[:3]
-            )
-        )
+        self.assertIs(registry.adapters[0].backend, douyin_backend)
+        self.assertTrue(all(
+            adapter.backend is streamlink_backend
+            for adapter in registry.adapters[1:3]
+        ))
         self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
 
     def test_default_adapters_reject_parser_confusion_urls(self):
         registry = build_default_registry(
-            streamlink_backend=object(), yt_dlp_backend=object()
+            douyin_backend=object(),
+            streamlink_backend=object(),
+            yt_dlp_backend=object(),
         )
         domains = {
             "douyin": "live.douyin.com",
