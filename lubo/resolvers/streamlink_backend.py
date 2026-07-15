@@ -17,6 +17,7 @@ from lubo.resolvers.base import (
 
 _HEIGHT_PATTERN = re.compile(r"(\d{3,4})p")
 _ACCESS_ERROR_MESSAGE = "Streamlink could not access the live stream"
+_SAFE_STREAM_HEADERS = frozenset({"user-agent", "origin", "referer"})
 
 
 class StreamlinkBackend:
@@ -78,12 +79,19 @@ class StreamlinkBackend:
             if not streams:
                 return ResolverResult(anchor_name=anchor_name, title=title)
 
+            stream_headers = {
+                str(name): str(value)
+                for name, value in session.http.headers.items()
+                if str(name).casefold() in _SAFE_STREAM_HEADERS
+            }
             resolved_streams = tuple(
                 resolved_stream
                 for quality_name, stream in streams.items()
                 if (
                     resolved_stream := _make_stream(
-                        str(quality_name), stream.url
+                        str(quality_name),
+                        stream.url,
+                        headers=stream_headers,
                     )
                 )
                 is not None
@@ -115,7 +123,12 @@ def _metadata_text(metadata: Any, name: str) -> str:
         return ""
 
 
-def _make_stream(quality_name: str, stream_url: str) -> ResolverStream | None:
+def _make_stream(
+    quality_name: str,
+    stream_url: str,
+    *,
+    headers: Mapping[str, str] | None = None,
+) -> ResolverStream | None:
     match = _HEIGHT_PATTERN.search(quality_name)
     height = int(match.group(1)) if match else None
     parsed_url = urlparse(stream_url)
@@ -133,4 +146,5 @@ def _make_stream(quality_name: str, stream_url: str) -> ResolverStream | None:
         protocol=protocol,
         quality_name=quality_name,
         height=height,
+        headers=headers or {},
     )

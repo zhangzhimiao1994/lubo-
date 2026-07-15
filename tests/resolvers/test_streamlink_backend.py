@@ -106,6 +106,32 @@ class StreamlinkBackendTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotEqual(factory.thread_id, main_thread_id)
 
+    async def test_resolve_preserves_safe_streamlink_request_headers(self):
+        session = FakeSession(
+            {"best": FakeStream("https://cdn.example/live.flv")}
+        )
+        session.http.headers.update(
+            {
+                "User-Agent": "Streamlink Agent",
+                "Origin": "https://www.huya.com",
+                "Authorization": "must-not-leak",
+            }
+        )
+
+        result = await StreamlinkBackend(SessionFactory(session)).resolve(
+            "https://www.huya.com/123",
+            headers={"Referer": "https://www.huya.com/"},
+        )
+
+        self.assertEqual(
+            dict(result.streams[0].headers),
+            {
+                "User-Agent": "Streamlink Agent",
+                "Origin": "https://www.huya.com",
+                "Referer": "https://www.huya.com/",
+            },
+        )
+
     async def test_resolve_returns_offline_result_when_no_streams_exist(self):
         session = FakeSession({}, author="Anchor", title="Ended")
 

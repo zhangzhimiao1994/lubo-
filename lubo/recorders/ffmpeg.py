@@ -60,7 +60,9 @@ class FFmpegRecorder:
                 "-c:a",
                 "aac" if output_format == OutputFormat.MP4 else "copy",
                 "-map",
-                "0",
+                "0:v?",
+                "-map",
+                "0:a?",
             ]
         muxer = "mpegts" if output_format == OutputFormat.TS else (
             "ipod" if output_format == OutputFormat.M4A else output_format.value

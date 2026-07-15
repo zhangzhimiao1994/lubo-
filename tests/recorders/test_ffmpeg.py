@@ -32,6 +32,24 @@ class FFmpegRecorderTests(unittest.TestCase):
         self.assertIn("https://pull.example/live.m3u8", command)
         self.assertTrue(command[-1].endswith("_%03d.ts"))
 
+    def test_video_recording_maps_only_video_and_audio_streams(self):
+        recorder = FFmpegRecorder(ffmpeg_path="ffmpeg")
+
+        command = recorder.build_command(
+            RecordingTarget(url="https://www.huya.com/123"),
+            self.live_stream(),
+            Path("downloads"),
+            RecorderOptions(output_format=OutputFormat.TS, split_enabled=False),
+        )
+
+        mapped_streams = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "-map"
+        ]
+        self.assertEqual(mapped_streams, ["0:v?", "0:a?"])
+        self.assertNotIn("0", mapped_streams)
+
     def test_builds_mp4_command_without_segments(self):
         recorder = FFmpegRecorder(ffmpeg_path="ffmpeg")
         target = RecordingTarget(url="https://live.douyin.com/123")
