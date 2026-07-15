@@ -1,5 +1,6 @@
 import ast
 import configparser
+import re
 import runpy
 import tomllib
 import unittest
@@ -10,6 +11,24 @@ from lubo.apps.android.platform import STOP_REQUEST_FILE
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+LEGACY_ANDROID_REQUIREMENTS = {"distro", "loguru", "pyexecjs"}
+FORBIDDEN_ANDROID_IMPORTS = {"_multiprocessing", "multiprocessing", "src"}
+
+
+def _requirement_name(requirement: str) -> str:
+    name = re.split(r"[<>=!~\[\s]", requirement.strip(), maxsplit=1)[0]
+    return name.casefold().replace("_", "-")
+
+
+def _import_roots(source_path: Path) -> set[str]:
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    roots = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.partition(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            roots.add(node.module.partition(".")[0])
+    return roots
 
 
 class AndroidBuildContractTests(unittest.TestCase):
@@ -48,6 +67,32 @@ class AndroidBuildContractTests(unittest.TestCase):
             app["requirements"],
             "python3,kivy==2.3.1,pyjnius,android,streamlink==8.4.0,yt-dlp==2026.6.9",
         )
+
+    def test_android_requirements_exclude_legacy_reference_runtime(self):
+        parser = configparser.RawConfigParser()
+        parser.read_string(self.spec)
+        requirement_names = {
+            _requirement_name(requirement)
+            for requirement in parser["app"]["requirements"].split(",")
+        }
+
+        self.assertTrue(LEGACY_ANDROID_REQUIREMENTS.isdisjoint(requirement_names))
+
+    def test_packaged_python_sources_do_not_import_legacy_or_multiprocessing_modules(self):
+        packaged_sources = [
+            REPO_ROOT / "android" / "main.py",
+            REPO_ROOT / "android" / "service" / "recorder_service.py",
+            *(REPO_ROOT / "lubo").rglob("*.py"),
+        ]
+        violations = {}
+        for path in packaged_sources:
+            forbidden_imports = _import_roots(path) & FORBIDDEN_ANDROID_IMPORTS
+            if forbidden_imports:
+                violations[str(path.relative_to(REPO_ROOT))] = sorted(
+                    forbidden_imports
+                )
+
+        self.assertEqual(violations, {})
 
     def test_distribution_buildozer_and_android_entrypoint_versions_match(self):
         with (REPO_ROOT / "pyproject.toml").open("rb") as metadata_file:
