@@ -83,6 +83,44 @@ class RecordingFetcher:
 
 
 class DouyinWebBackendTests(unittest.IsolatedAsyncioTestCase):
+    async def test_uses_latest_state_for_the_target_room(self):
+        stale_live = live_room()
+        stale_live["web_rid"] = "445365761510"
+        stale_live["room"]["title"] = "stale target live state"
+        current_offline = live_room()
+        current_offline["web_rid"] = "445365761510"
+        current_offline["room"]["status"] = 4
+        current_offline["room"]["title"] = "Latest target offline state"
+        backend = DouyinWebBackend(
+            fetcher=RecordingFetcher(
+                f"{pace_page(stale_live)}{pace_page(current_offline)}"
+            )
+        )
+
+        result = await backend.resolve("https://live.douyin.com/445365761510")
+
+        self.assertFalse(result.is_live)
+        self.assertEqual(result.title, "Latest target offline state")
+
+    async def test_prefers_target_offline_state_over_other_room_live_state(self):
+        stale_live = live_room()
+        stale_live["web_rid"] = "999999999999"
+        stale_live["room"]["title"] = "stale live from another room"
+        current_offline = live_room()
+        current_offline["web_rid"] = "445365761510"
+        current_offline["room"]["status"] = 4
+        current_offline["room"]["title"] = "Current offline room"
+        backend = DouyinWebBackend(
+            fetcher=RecordingFetcher(
+                f"{pace_page(stale_live)}{pace_page(current_offline)}"
+            )
+        )
+
+        result = await backend.resolve("https://live.douyin.com/445365761510")
+
+        self.assertFalse(result.is_live)
+        self.assertEqual(result.title, "Current offline room")
+
     async def test_skips_empty_room_before_real_live_state(self):
         backend = DouyinWebBackend(
             fetcher=RecordingFetcher(

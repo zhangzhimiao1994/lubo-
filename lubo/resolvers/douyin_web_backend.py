@@ -113,7 +113,10 @@ class DouyinWebBackend:
             raise PlatformAccessError(_ACCESS_ERROR_MESSAGE) from None
 
         try:
-            room_info = _extract_room_info(page)
+            room_info = _extract_room_info(
+                page,
+                target_web_rid=_target_web_rid(url),
+            )
             room = _as_mapping(room_info.get("room"))
             if room is None:
                 raise ValueError("missing room")
@@ -232,7 +235,11 @@ def _remove_request_header(request: Request, name: str) -> None:
                 collection.pop(header_name, None)
 
 
-def _extract_room_info(page: str) -> Mapping[str, Any]:
+def _extract_room_info(
+    page: str,
+    *,
+    target_web_rid: str = "",
+) -> Mapping[str, Any]:
     candidates: list[Mapping[str, Any]] = []
     search_from = 0
     while True:
@@ -251,9 +258,34 @@ def _extract_room_info(page: str) -> Mapping[str, Any]:
         rank = _room_candidate_rank(room_info)
         if rank >= 0:
             ranked_candidates.append((rank, index, room_info))
+    if target_web_rid:
+        target_candidates = [
+            candidate
+            for candidate in ranked_candidates
+            if _room_web_rid(candidate[2]) == target_web_rid
+        ]
+        if target_candidates:
+            return max(target_candidates, key=lambda item: item[1])[2]
+        if any(_room_web_rid(candidate[2]) for candidate in ranked_candidates):
+            raise ValueError("missing target Douyin room state")
     if ranked_candidates:
         return max(ranked_candidates, key=lambda item: (item[0], item[1]))[2]
     raise ValueError("missing Douyin room state")
+
+
+def _target_web_rid(url: str) -> str:
+    try:
+        parsed = urlsplit(url.strip())
+    except (AttributeError, TypeError, ValueError):
+        return ""
+    if (parsed.hostname or "").casefold() != "live.douyin.com":
+        return ""
+    first_segment = parsed.path.strip("/").split("/", 1)[0]
+    return first_segment if first_segment.isdecimal() else ""
+
+
+def _room_web_rid(room_info: Mapping[str, Any]) -> str:
+    return str(room_info.get("web_rid", "")).strip()
 
 
 def _read_call_content(page: str, start: int) -> tuple[str, int]:
