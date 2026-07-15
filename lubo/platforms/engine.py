@@ -71,13 +71,33 @@ def _protocol_url(
 ) -> str:
     if selected.url and selected.protocol.lower() == protocol:
         return selected.url
+    selected_quality = _normalized_quality_name(selected.quality_name)
+    if selected_quality:
+        for stream in streams:
+            if (
+                stream.url
+                and stream.protocol.lower() == protocol
+                and _normalized_quality_name(stream.quality_name)
+                == selected_quality
+            ):
+                return stream.url
     if selected.height is None:
         return ""
     for stream in streams:
+        stream_quality = _normalized_quality_name(stream.quality_name)
         if (
             stream.url
             and stream.protocol.lower() == protocol
             and stream.height == selected.height
+            and not (
+                selected_quality
+                and stream_quality
+                and selected_quality != stream_quality
+            )
         ):
             return stream.url
     return ""
+
+
+def _normalized_quality_name(value: str) -> str:
+    return " ".join(value.split()).casefold()

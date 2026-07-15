@@ -1,11 +1,14 @@
 import json
 import unittest
 from unittest.mock import patch
+from urllib.request import Request
 
 from lubo.resolvers.base import PlatformAccessError
 from lubo.resolvers.douyin_web_backend import (
     DEFAULT_USER_AGENT,
     DouyinWebBackend,
+    _SafeDouyinRedirectHandler,
+    _fetch_page,
 )
 
 
@@ -80,6 +83,51 @@ class RecordingFetcher:
 
 
 class DouyinWebBackendTests(unittest.IsolatedAsyncioTestCase):
+    async def test_skips_empty_room_before_real_live_state(self):
+        backend = DouyinWebBackend(
+            fetcher=RecordingFetcher(
+                f"{pace_page({'room': {}})}{pace_page(live_room())}"
+            )
+        )
+
+        result = await backend.resolve("https://live.douyin.com/445365761510")
+
+        self.assertTrue(result.is_live)
+        self.assertEqual(result.anchor_name, "Desktop anchor")
+
+    async def test_prefers_live_state_over_earlier_offline_placeholder(self):
+        offline = live_room()
+        offline["room"]["status"] = 4
+        offline["room"]["title"] = "stale offline placeholder"
+        backend = DouyinWebBackend(
+            fetcher=RecordingFetcher(
+                f"{pace_page(offline)}{pace_page(live_room())}"
+            )
+        )
+
+        result = await backend.resolve("https://live.douyin.com/445365761510")
+
+        self.assertTrue(result.is_live)
+        self.assertEqual(result.title, "Current Douyin live")
+
+    async def test_collects_candidates_from_one_pace_text_chunk(self):
+        offline = live_room()
+        offline["room"]["status"] = 4
+        offline_state = {"state": {"roomStore": {"roomInfo": offline}}}
+        live_state = {"state": {"roomStore": {"roomInfo": live_room()}}}
+        payload = json.dumps(offline_state) + "\n" + json.dumps(live_state)
+        page = (
+            "<script>self.__pace_f.push([1,"
+            f"{json.dumps(payload)}"
+            "])</script>"
+        )
+        backend = DouyinWebBackend(fetcher=RecordingFetcher(page))
+
+        result = await backend.resolve("https://live.douyin.com/445365761510")
+
+        self.assertTrue(result.is_live)
+        self.assertEqual(result.title, "Current Douyin live")
+
     async def test_skips_empty_initial_room_store_before_real_room_state(self):
         empty_state = pace_page({})
         real_state = pace_page(live_room())
@@ -252,6 +300,101 @@ class DefaultHttpFetcherTests(unittest.TestCase):
         request = build_opener.return_value.open.call_args.args[0]
         self.assertEqual(request.get_header("User-agent"), DEFAULT_USER_AGENT)
         self.assertEqual(request.get_header("Referer"), "https://live.douyin.com/")
+
+    @patch("lubo.resolvers.douyin_web_backend.build_opener")
+    def test_initial_http_url_is_normalized_to_trusted_https(self, build_opener):
+        response = build_opener.return_value.open.return_value.__enter__.return_value
+        response.read.return_value = b""
+
+        _fetch_page(
+            "http://live.douyin.com/123?room=1",
+            headers={
+                "User-Agent": DEFAULT_USER_AGENT,
+                "Host": "evil.example",
+            },
+            proxy_addr="",
+            timeout=1,
+            max_response_bytes=100,
+        )
+
+        request = build_opener.return_value.open.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://live.douyin.com/123?room=1",
+        )
+        self.assertIsNone(request.get_header("Host"))
+
+    @patch("lubo.resolvers.douyin_web_backend.build_opener")
+    def test_initial_request_rejects_untrusted_or_ambiguous_urls(self, build_opener):
+        invalid_urls = (
+            "ftp://live.douyin.com/123",
+            "https://evil.example/123",
+            "https://user@live.douyin.com/123",
+            "https://live.douyin.com:444/123",
+            "https://live.douyin.com.evil.example/123",
+        )
+
+        for url in invalid_urls:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                _fetch_page(
+                    url,
+                    headers={"Cookie": "sessionid=secret"},
+                    proxy_addr="",
+                    timeout=1,
+                    max_response_bytes=100,
+                )
+
+        build_opener.assert_not_called()
+
+
+class SafeDouyinRedirectHandlerTests(unittest.TestCase):
+    def setUp(self):
+        self.handler = _SafeDouyinRedirectHandler()
+        self.request = Request(
+            "https://live.douyin.com/123",
+            headers={
+                "Cookie": "sessionid=secret",
+                "User-Agent": DEFAULT_USER_AGENT,
+            },
+        )
+
+    def redirect(self, target):
+        return self.handler.redirect_request(
+            self.request,
+            None,
+            302,
+            "Found",
+            {},
+            target,
+        )
+
+    def test_cross_host_redirect_drops_explicit_cookie(self):
+        redirected = self.redirect("https://v.douyin.com/short-link")
+
+        self.assertIsNotNone(redirected)
+        self.assertIsNone(redirected.get_header("Cookie"))
+        self.assertEqual(
+            redirected.get_header("User-agent"),
+            DEFAULT_USER_AGENT,
+        )
+
+    def test_same_host_redirect_keeps_cookie(self):
+        redirected = self.redirect("https://live.douyin.com/456")
+
+        self.assertEqual(redirected.get_header("Cookie"), "sessionid=secret")
+
+    def test_redirect_rejects_malicious_targets(self):
+        invalid_targets = (
+            "http://live.douyin.com/123",
+            "file:///etc/passwd",
+            "https://evil.example/123",
+            "https://user@v.douyin.com/123",
+            "https://v.douyin.com:444/123",
+        )
+
+        for target in invalid_targets:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                self.redirect(target)
 
 
 if __name__ == "__main__":

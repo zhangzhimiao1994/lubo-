@@ -117,6 +117,43 @@ class DouyinAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stream.flv_url, "")
         self.assertEqual(stream.hls_url, "")
 
+    async def test_pairs_same_named_hls_when_its_height_is_unknown(self):
+        backend = FakeBackend(
+            ResolverResult(
+                anchor_name="anchor-a",
+                title="live-title",
+                is_live=True,
+                streams=(
+                    ResolverStream(
+                        url="https://pull.example/origin.flv",
+                        protocol="flv",
+                        quality_name="origin",
+                        height=1088,
+                    ),
+                    ResolverStream(
+                        url="https://pull.example/wrong.m3u8",
+                        protocol="hls",
+                        quality_name="hd",
+                        height=1088,
+                    ),
+                    ResolverStream(
+                        url="https://pull.example/origin.m3u8",
+                        protocol="hls",
+                        quality_name="ORIGIN",
+                        height=None,
+                    ),
+                ),
+            )
+        )
+
+        resolved = await DouyinAdapter(backend).resolve(
+            RecordingTarget("https://live.douyin.com/123"),
+            ResolveContext(quality=Quality.ORIGINAL),
+        )
+
+        self.assertEqual(resolved.flv_url, "https://pull.example/origin.flv")
+        self.assertEqual(resolved.hls_url, "https://pull.example/origin.m3u8")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ from http.cookiejar import CookieJar
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import (
+    HTTPRedirectHandler,
     HTTPCookieProcessor,
     ProxyHandler,
     Request,
@@ -37,6 +38,9 @@ _QUALITY_URL_KEYS = (
     ("ld", "SD2"),
 )
 _RESOLUTION_PATTERN = re.compile(r"(\d{2,5})\s*[xX*]\s*(\d{2,5})")
+_TRUSTED_DOUYIN_HOSTS = frozenset(
+    {"live.douyin.com", "v.douyin.com", "www.douyin.com"}
+)
 
 
 PageFetcher = Callable[..., str]
@@ -140,14 +144,21 @@ def _fetch_page(
     timeout: float,
     max_response_bytes: int,
 ) -> str:
+    safe_url = _validated_douyin_url(url, upgrade_http=True)
     proxies = (
         {"http": proxy_addr, "https": proxy_addr} if proxy_addr else {}
     )
     opener = build_opener(
         ProxyHandler(proxies),
+        _SafeDouyinRedirectHandler(),
         HTTPCookieProcessor(CookieJar()),
     )
-    request = Request(url, headers=dict(headers), method="GET")
+    safe_headers = {
+        name: value
+        for name, value in headers.items()
+        if name.casefold() != "host"
+    }
+    request = Request(safe_url, headers=safe_headers, method="GET")
     chunks: list[bytes] = []
     total = 0
     with opener.open(request, timeout=timeout) as response:
@@ -162,7 +173,67 @@ def _fetch_page(
     return b"".join(chunks).decode("utf-8")
 
 
+class _SafeDouyinRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        safe_url = _validated_douyin_url(newurl, upgrade_http=False)
+        redirected = super().redirect_request(
+            req,
+            fp,
+            code,
+            msg,
+            headers,
+            safe_url,
+        )
+        if redirected is None:
+            return None
+        old_host = urlsplit(req.full_url).hostname
+        new_host = urlsplit(safe_url).hostname
+        if (
+            old_host is None
+            or new_host is None
+            or old_host.casefold() != new_host.casefold()
+        ):
+            _remove_request_header(redirected, "Cookie")
+        return redirected
+
+
+def _validated_douyin_url(url: str, *, upgrade_http: bool) -> str:
+    try:
+        parsed = urlsplit(url.strip())
+        scheme = parsed.scheme.casefold()
+        if scheme == "http" and upgrade_http:
+            scheme = "https"
+        if scheme != "https":
+            raise ValueError("Douyin URL must use HTTPS")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("Douyin URL must not include user info")
+        hostname = parsed.hostname
+        if (
+            hostname is None
+            or hostname.casefold() not in _TRUSTED_DOUYIN_HOSTS
+        ):
+            raise ValueError("untrusted Douyin host")
+        port = parsed.port
+        if port not in (None, 443):
+            raise ValueError("Douyin URL must use the default HTTPS port")
+    except (AttributeError, TypeError, ValueError):
+        raise ValueError("invalid Douyin URL") from None
+
+    host = hostname.casefold()
+    netloc = host if port is None else f"{host}:443"
+    return urlunsplit(("https", netloc, parsed.path, parsed.query, parsed.fragment))
+
+
+def _remove_request_header(request: Request, name: str) -> None:
+    normalized = name.casefold()
+    for collection in (request.headers, request.unredirected_hdrs):
+        for header_name in tuple(collection):
+            if header_name.casefold() == normalized:
+                collection.pop(header_name, None)
+
+
 def _extract_room_info(page: str) -> Mapping[str, Any]:
+    candidates: list[Mapping[str, Any]] = []
     search_from = 0
     while True:
         marker_at = page.find(_PACE_MARKER, search_from)
@@ -174,9 +245,14 @@ def _extract_room_info(page: str) -> Mapping[str, Any]:
             pushed = json.loads(call_content)
         except (TypeError, ValueError):
             continue
-        room_info = _find_room_info(pushed)
-        if room_info is not None:
-            return room_info
+        candidates.extend(_collect_room_infos(pushed))
+    ranked_candidates = []
+    for index, room_info in enumerate(candidates):
+        rank = _room_candidate_rank(room_info)
+        if rank >= 0:
+            ranked_candidates.append((rank, index, room_info))
+    if ranked_candidates:
+        return max(ranked_candidates, key=lambda item: (item[0], item[1]))[2]
     raise ValueError("missing Douyin room state")
 
 
@@ -206,39 +282,61 @@ def _read_call_content(page: str, start: int) -> tuple[str, int]:
     raise ValueError("unterminated pace push")
 
 
-def _find_room_info(value: Any, depth: int = 0) -> Mapping[str, Any] | None:
+def _collect_room_infos(
+    value: Any,
+    depth: int = 0,
+) -> list[Mapping[str, Any]]:
     if depth > 16:
-        return None
+        return []
+    found: list[Mapping[str, Any]] = []
     if isinstance(value, Mapping):
         room_store = _as_mapping(value.get("roomStore"))
         if room_store is not None:
             room_info = _as_mapping(room_store.get("roomInfo"))
-            if room_info is not None and _as_mapping(room_info.get("room")) is not None:
-                return room_info
+            if room_info is not None:
+                found.append(room_info)
         for nested in value.values():
-            found = _find_room_info(nested, depth + 1)
-            if found is not None:
-                return found
-        return None
+            found.extend(_collect_room_infos(nested, depth + 1))
+        return found
     if isinstance(value, (list, tuple)):
         for nested in value:
-            found = _find_room_info(nested, depth + 1)
-            if found is not None:
-                return found
-        return None
+            found.extend(_collect_room_infos(nested, depth + 1))
+        return found
     if isinstance(value, str) and "roomStore" in value:
         decoder = json.JSONDecoder()
-        for index, character in enumerate(value):
-            if character not in "[{":
-                continue
+        index = 0
+        while index < len(value):
+            starts = tuple(
+                start
+                for start in (value.find("[", index), value.find("{", index))
+                if start >= 0
+            )
+            if not starts:
+                break
+            start = min(starts)
             try:
-                decoded, _ = decoder.raw_decode(value, index)
+                decoded, end = decoder.raw_decode(value, start)
             except ValueError:
+                index = start + 1
                 continue
-            found = _find_room_info(decoded, depth + 1)
-            if found is not None:
-                return found
-    return None
+            nested = _collect_room_infos(decoded, depth + 1)
+            if nested:
+                found.extend(nested)
+            index = end
+    return found
+
+
+def _room_candidate_rank(room_info: Mapping[str, Any]) -> int:
+    room = _as_mapping(room_info.get("room"))
+    if not room:
+        return -1
+    status = str(room.get("status", "")).strip()
+    if not status:
+        return -1
+    if status != "2":
+        return 0
+    stream_url = _as_mapping(room.get("stream_url")) or {}
+    return 2 if _extract_streams(stream_url) else 1
 
 
 def _extract_streams(stream_url: Mapping[str, Any]) -> tuple[ResolverStream, ...]:
