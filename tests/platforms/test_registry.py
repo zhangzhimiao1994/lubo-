@@ -65,11 +65,13 @@ class RegistryTests(unittest.TestCase):
 
         douyin_backend = FalsyBackend()
         streamlink_backend = FalsyBackend()
+        douyu_backend = FalsyBackend()
         yt_dlp_backend = FalsyBackend()
 
         registry = build_default_registry(
             douyin_backend=douyin_backend,
             streamlink_backend=streamlink_backend,
+            douyu_backend=douyu_backend,
             yt_dlp_backend=yt_dlp_backend,
         )
 
@@ -82,37 +84,49 @@ class RegistryTests(unittest.TestCase):
             adapter.backend is streamlink_backend
             for adapter in registry.adapters[1:3]
         ))
-        self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
+        self.assertIs(registry.adapters[3].backend, douyu_backend)
 
     @patch("lubo.platforms.factory.DouyinWebBackend")
-    @patch("lubo.platforms.factory.YtDlpBackend")
+    @patch("lubo.platforms.factory.DouyuWebBackend")
     @patch("lubo.platforms.factory.StreamlinkBackend")
     def test_default_factory_instantiates_each_backend_once(
         self,
         streamlink_backend_class,
-        yt_dlp_backend_class,
+        douyu_backend_class,
         douyin_backend_class,
     ):
         douyin_backend = douyin_backend_class.return_value
         streamlink_backend = streamlink_backend_class.return_value
-        yt_dlp_backend = yt_dlp_backend_class.return_value
+        douyu_backend = douyu_backend_class.return_value
 
         registry = build_default_registry()
 
         douyin_backend_class.assert_called_once_with()
         streamlink_backend_class.assert_called_once_with()
-        yt_dlp_backend_class.assert_called_once_with()
+        douyu_backend_class.assert_called_once_with()
         self.assertIs(registry.adapters[0].backend, douyin_backend)
         self.assertTrue(all(
             adapter.backend is streamlink_backend
             for adapter in registry.adapters[1:3]
         ))
-        self.assertIs(registry.adapters[3].backend, yt_dlp_backend)
+        self.assertIs(registry.adapters[3].backend, douyu_backend)
+
+    def test_legacy_yt_dlp_injection_remains_a_douyu_backend_fallback(self):
+        legacy_backend = object()
+
+        registry = build_default_registry(
+            douyin_backend=object(),
+            streamlink_backend=object(),
+            yt_dlp_backend=legacy_backend,
+        )
+
+        self.assertIs(registry.adapters[3].backend, legacy_backend)
 
     def test_default_adapters_reject_parser_confusion_urls(self):
         registry = build_default_registry(
             douyin_backend=object(),
             streamlink_backend=object(),
+            douyu_backend=object(),
             yt_dlp_backend=object(),
         )
         domains = {

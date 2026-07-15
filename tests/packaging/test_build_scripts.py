@@ -664,10 +664,10 @@ class BuildScriptContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         expected_rows = (
-            "| `douyin` | Douyin / 抖音 | `live.douyin.com`, `v.douyin.com`, `www.douyin.com` | Streamlink | `douyin` |",
+            "| `douyin` | Douyin / 抖音 | `live.douyin.com`, `v.douyin.com`, `www.douyin.com` | 内置网页解析 | `douyin` |",
             "| `bilibili` | Bilibili Live / B站直播 | `live.bilibili.com` | Streamlink | `bilibili` |",
             "| `huya` | Huya / 虎牙 | `huya.com`, `www.huya.com`, `m.huya.com` | Streamlink | `huya` |",
-            "| `douyu` | Douyu / 斗鱼 | `douyu.com`, `www.douyu.com`, `m.douyu.com` | yt-dlp | `douyu` |",
+            "| `douyu` | Douyu / 斗鱼 | `douyu.com`, `www.douyu.com`, `m.douyu.com` | 斗鱼公开 H5 API | `douyu` |",
         )
         for row in expected_rows:
             self.assertIn(row, platforms)
