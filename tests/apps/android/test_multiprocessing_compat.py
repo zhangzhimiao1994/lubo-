@@ -103,7 +103,7 @@ ANDROID_RUNTIME_CHECK = textwrap.dedent(
         backend = StreamlinkBackend(lambda: fake_session)
 
         def registry_factory():
-            return build_default_registry(streamlink_backend=backend)
+            return build_default_registry(douyin_backend=backend)
 
         def stop_after_failed_check(_seconds):
             stop_request.write_text("stop\n", encoding="ascii")
