@@ -191,6 +191,7 @@ class FFmpegRecorderTests(unittest.TestCase):
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
     def test_stop_sends_q_and_waits_for_ffmpeg(self):

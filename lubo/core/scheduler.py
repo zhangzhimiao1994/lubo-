@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Condition, RLock
-from typing import Any
+from typing import Any, Callable
 
 from lubo.core.events import EventBus, RecorderEvent, RecorderEventType
-from lubo.core.models import OutputFormat, Quality, RecordingStatus, RecordingTarget, RecordingTask
-from lubo.platforms.base import ResolveContext, UnsupportedPlatformError
+from lubo.core.models import OutputFormat, Quality, RecordingStatus, RecordingTarget, RecordingTask, StreamInfo
+from lubo.platforms.base import PlatformAdapter, ResolveContext, UnsupportedPlatformError
 from lubo.platforms.registry import PlatformRegistry
 from lubo.recorders.ffmpeg import RecorderOptions
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,22 +30,35 @@ class SchedulerConfig:
     split_seconds: int = 1800
     max_concurrency: int = 3
     convert_to_mp4: bool = False
+    minimum_free_space_mb: int = 1024
 
     def __post_init__(self) -> None:
         if self.max_concurrency <= 0:
             raise ValueError("max_concurrency must be greater than 0")
+        if self.minimum_free_space_mb < 0:
+            raise ValueError("minimum_free_space_mb must not be negative")
 
 
 class RecordingScheduler:
-    def __init__(self, registry: PlatformRegistry, recorder: Any, event_bus: EventBus, config: SchedulerConfig) -> None:
+    def __init__(
+        self,
+        registry: PlatformRegistry,
+        recorder: Any,
+        event_bus: EventBus,
+        config: SchedulerConfig,
+        *,
+        disk_usage: Callable[[Path], Any] = shutil.disk_usage,
+    ) -> None:
         self.registry = registry
         self.recorder = recorder
         self.event_bus = event_bus
         self.config = config
+        self._disk_usage = disk_usage
         self._tasks: dict[str, RecordingTask] = {}
         self._processes: dict[str, Any] = {}
         self._inflight: set[str] = set()
         self._stopping: set[str] = set()
+        self._suppressed: set[str] = set()
         self._lifecycle_lock = RLock()
         self._stop_condition = Condition(self._lifecycle_lock)
         self._closed = False
@@ -51,9 +69,22 @@ class RecordingScheduler:
                 return
             self._reap_exited_processes()
 
+        disk_error = self._disk_space_error()
+        if disk_error is not None:
+            self._halt_for_disk_error(targets, disk_error)
+            return
+
+        with self._lifecycle_lock:
+            if self._closed:
+                return
             claimed: list[RecordingTarget] = []
             for target in targets:
-                if not target.enabled or target.id in self._processes or target.id in self._inflight:
+                if (
+                    not target.enabled
+                    or target.id in self._suppressed
+                    or target.id in self._processes
+                    or target.id in self._inflight
+                ):
                     continue
                 self._inflight.add(target.id)
                 claimed.append(target)
@@ -72,13 +103,23 @@ class RecordingScheduler:
 
         await asyncio.gather(*(run_check(target) for target in claimed))
 
-    def stop_target(self, target_id: str) -> None:
+    def pause_target(self, target_id: str) -> None:
         with self._lifecycle_lock:
-            if target_id in self._stopping:
-                return
+            self._suppressed.add(target_id)
+        if not self.stop_target(target_id):
+            raise RuntimeError("Unable to stop target recording.")
+
+    def resume_target(self, target_id: str) -> None:
+        with self._lifecycle_lock:
+            self._suppressed.discard(target_id)
+
+    def stop_target(self, target_id: str) -> bool:
+        with self._stop_condition:
+            while target_id in self._stopping:
+                self._stop_condition.wait()
             process = self._processes.get(target_id)
             if process is None:
-                return
+                return True
             self._stopping.add(target_id)
             task = self._tasks.get(target_id)
             if task:
@@ -114,7 +155,7 @@ class RecordingScheduler:
                     message=message,
                 )
             )
-            return
+            return force_succeeded
 
         with self._lifecycle_lock:
             self._stopping.discard(target_id)
@@ -125,6 +166,7 @@ class RecordingScheduler:
                 task.last_error = ""
             self._stop_condition.notify_all()
         self.event_bus.publish(RecorderEvent(type=RecorderEventType.RECORDING_STOPPED, target_id=target_id))
+        return True
 
     def stop_all(self) -> None:
         attempted: set[str] = set()
@@ -166,6 +208,22 @@ class RecordingScheduler:
     def tasks(self) -> dict[str, RecordingTask]:
         with self._lifecycle_lock:
             return dict(self._tasks)
+
+    async def resolve_preview_stream(self, target: RecordingTarget) -> StreamInfo:
+        with self._lifecycle_lock:
+            task = self._tasks.get(target.id)
+            if (
+                task is not None
+                and task.stream is not None
+                and task.stream.is_live
+            ):
+                if task.status == RecordingStatus.LIVE:
+                    return task.stream
+                if task.status == RecordingStatus.RECORDING:
+                    process = self._processes.get(target.id)
+                    if process is not None and process.poll() is None:
+                        return task.stream
+        return await self._resolve_target(target)
 
     def _reap_exited_processes(self) -> None:
         for target_id, process in list(self._processes.items()):
@@ -210,18 +268,13 @@ class RecordingScheduler:
         task.status = RecordingStatus.RESOLVING
         task.last_error = ""
         self.event_bus.publish(RecorderEvent(type=RecorderEventType.RESOLVE_STARTED, target_id=target.id))
-        context = ResolveContext(
-            quality=target.quality or self.config.quality,
-            proxy_addr=self.config.proxy_addr,
-            cookies=self.config.cookies,
-        )
         try:
-            stream = await adapter.resolve(target, context)
+            stream = await self._resolve_target(target, adapter=adapter)
         except Exception as exc:
             self._fail_task(target, RecorderEventType.ERROR, exc)
             return
         with self._lifecycle_lock:
-            if self._closed:
+            if self._closed or target.id in self._suppressed:
                 task.status = RecordingStatus.IDLE
                 return
         task.stream = stream
@@ -244,13 +297,21 @@ class RecordingScheduler:
             convert_to_mp4=self.config.convert_to_mp4,
             proxy_addr=self.config.proxy_addr,
         )
+        disk_error = self._disk_space_error()
+        if disk_error is not None:
+            self._fail_task(
+                target,
+                RecorderEventType.RECORDING_FAILED,
+                disk_error,
+            )
+            return
         try:
             command = self.recorder.build_command(target, stream, self.config.output_dir, options)
         except Exception as exc:
             self._fail_task(target, RecorderEventType.RECORDING_FAILED, exc)
             return
         with self._lifecycle_lock:
-            if self._closed:
+            if self._closed or target.id in self._suppressed:
                 task.status = RecordingStatus.IDLE
                 return
             try:
@@ -268,8 +329,79 @@ class RecordingScheduler:
                 )
             )
 
+    async def _resolve_target(
+        self,
+        target: RecordingTarget,
+        *,
+        adapter: PlatformAdapter | None = None,
+    ) -> StreamInfo:
+        if adapter is None:
+            adapter = self.registry.match(target.url)
+        if adapter is None:
+            raise UnsupportedPlatformError()
+        context = ResolveContext(
+            quality=target.quality or self.config.quality,
+            proxy_addr=self.config.proxy_addr,
+            cookies=self.config.cookies,
+        )
+        return await adapter.resolve(target, context)
+
+    def _disk_space_error(self) -> RuntimeError | None:
+        required_mb = self.config.minimum_free_space_mb
+        if required_mb == 0:
+            return None
+        try:
+            free_bytes = int(self._disk_usage(self.config.output_dir).free)
+        except Exception as exc:
+            output_path = self.config.output_dir
+            path_kind = "absolute" if output_path.is_absolute() else "relative"
+            logger.warning(
+                "disk space inspection failed output_path=%s(depth=%d) error_type=%s",
+                path_kind,
+                len(output_path.parts),
+                type(exc).__name__,
+            )
+            return RuntimeError(
+                "could not check free disk space for output directory"
+            )
+        required_bytes = required_mb * 1024 * 1024
+        if free_bytes >= required_bytes:
+            return None
+        free_mb = max(0, free_bytes // (1024 * 1024))
+        return RuntimeError(
+            f"insufficient disk space: {free_mb} MiB free; "
+            f"at least {required_mb} MiB required"
+        )
+
+    def _halt_for_disk_error(
+        self,
+        targets: list[RecordingTarget],
+        error: RuntimeError,
+    ) -> None:
+        self.stop_all()
+        with self._lifecycle_lock:
+            remaining = set(self._processes)
+        for target in targets:
+            if target.enabled and target.id not in remaining:
+                self._fail_task(
+                    target,
+                    RecorderEventType.RECORDING_FAILED,
+                    error,
+                )
+
     def _fail_task(self, target: RecordingTarget, event_type: RecorderEventType, exc: Exception) -> None:
-        task = self._tasks.setdefault(target.id, RecordingTask(target=target))
-        task.status = RecordingStatus.ERROR
-        task.last_error = str(exc)
-        self.event_bus.publish(RecorderEvent(type=event_type, target_id=target.id, message=str(exc)))
+        with self._lifecycle_lock:
+            task = self._tasks.setdefault(target.id, RecordingTask(target=target))
+            if self._closed or target.id in self._suppressed:
+                task.status = RecordingStatus.IDLE
+                task.last_error = ""
+                return
+            task.status = RecordingStatus.ERROR
+            task.last_error = str(exc)
+        self.event_bus.publish(
+            RecorderEvent(
+                type=event_type,
+                target_id=target.id,
+                message=str(exc),
+            )
+        )

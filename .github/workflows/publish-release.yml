@@ -1,11 +1,6 @@
 name: Publish Release Assets
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/publish-release.yml"
   workflow_dispatch:
     inputs:
       tag:
@@ -14,6 +9,7 @@ on:
         type: string
   workflow_run:
     workflows:
+      - Build Desktop Apps
       - Build Android APK
     types:
       - completed
@@ -22,13 +18,17 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: publish-release-${{ github.event.workflow_run.head_sha || inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     if: >-
       github.event_name != 'workflow_run' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -48,6 +48,11 @@ jobs:
           tag="$REQUESTED_TAG"
           if [[ -z "$tag" && -n "$WORKFLOW_RUN_SHA" ]]; then
             tag="$(git tag --points-at "$WORKFLOW_RUN_SHA" --sort=-version:refname | head -n 1)"
+            if [[ -z "$tag" ]]; then
+              echo "No release tag points at workflow run $WORKFLOW_RUN_SHA; skipping publication."
+              echo "ready=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           if [[ -z "$tag" ]]; then
             tag="$(git tag --sort=-version:refname | head -n 1)"
@@ -75,16 +80,24 @@ jobs:
               | if length > 0 then .[0].id else empty end
             ' <<<"$runs"
           )"
+
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
           if [[ -z "$desktop_run" || -z "$android_run" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+              echo "The counterpart build has not completed successfully; its completion event will retry publishing."
+              echo "ready=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "Successful desktop and Android runs are required for $tag ($sha)." >&2
             exit 1
           fi
 
-          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "ready=true" >>"$GITHUB_OUTPUT"
           echo "desktop_run=$desktop_run" >>"$GITHUB_OUTPUT"
           echo "android_run=$android_run" >>"$GITHUB_OUTPUT"
 
       - name: Download Windows, Linux, and Android artifacts
+        if: steps.release.outputs.ready == 'true'
         shell: bash
         env:
           DESKTOP_RUN: ${{ steps.release.outputs.desktop_run }}
@@ -99,6 +112,7 @@ jobs:
             --name Lubo-android-debug --dir stage/android
 
       - name: Prepare permanent release assets
+        if: steps.release.outputs.ready == 'true'
         shell: bash
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
@@ -113,25 +127,76 @@ jobs:
             exit 1
           fi
           cp -- "$apk" "release/Lubo-$RELEASE_TAG-android-debug.apk"
+          checksum_file="release/Lubo-$RELEASE_TAG-SHA256SUMS.txt"
+          (
+            cd release
+            sha256sum \
+              "Lubo-$RELEASE_TAG-windows.zip" \
+              "Lubo-$RELEASE_TAG-linux.zip" \
+              "Lubo-$RELEASE_TAG-android-debug.apk"
+          ) >"$checksum_file"
+
+      - name: Generate release notes
+        if: steps.release.outputs.ready == 'true'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_TAG^" 2>/dev/null || true)"
+
+          {
+            echo "# Lubo $RELEASE_TAG"
+            echo
+            echo "## Build information"
+            echo
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Commit: \`$release_sha\`"
+            echo "- Windows desktop: bundled application and FFmpeg"
+            echo "- Linux desktop: bundled application and FFmpeg"
+            echo "- Android debug APK: debug-key signed test build"
+            echo "- SHA-256 checksums: \`Lubo-$RELEASE_TAG-SHA256SUMS.txt\`"
+            echo
+            echo "## Runtime dependencies"
+            echo
+            while IFS= read -r dependency; do
+              [[ -z "$dependency" ]] || printf -- '- `%s`\n' "$dependency"
+            done <requirements.txt
+            echo
+            echo "## Changes"
+            echo
+            if [[ -n "$previous_tag" ]]; then
+              git log --pretty='- %s' "$previous_tag..$RELEASE_TAG"
+            else
+              git log --pretty='- %s' -n 20 "$RELEASE_TAG"
+            fi
+          } >release-notes.md
 
       - name: Create or update GitHub Release
+        if: steps.release.outputs.ready == 'true'
         shell: bash
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           assets=(release/*)
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease=(--prerelease --latest=false)
+          fi
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Lubo $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              "${prerelease[@]}"
             gh release upload "$RELEASE_TAG" "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
-            prerelease=()
-            if [[ "$RELEASE_TAG" == *-* ]]; then
-              prerelease=(--prerelease)
-            fi
             gh release create "$RELEASE_TAG" "${assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Lubo $RELEASE_TAG" \
-              --notes "Windows、Linux 和 Android 构建文件。" \
+              --notes-file release-notes.md \
               "${prerelease[@]}"
           fi

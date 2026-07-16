@@ -13,6 +13,7 @@ CONFIG_SCHEMA = {
         "split_enabled": "true",
         "split_seconds": "1800",
         "convert_to_mp4": "true",
+        "minimum_free_space_mb": "1024",
     },
     "monitor": {
         "loop_seconds": "300",
@@ -43,8 +44,8 @@ def sanitize_config(source: Path, destination: Path) -> None:
     for section, defaults in CONFIG_SCHEMA.items():
         sanitized[section] = {
             key: (
-                ""
-                if section == "cookies" or key == "save_path"
+                default
+                if section in {"cookies", "proxy"} or key == "save_path"
                 else source_parser.get(section, key, fallback=default)
             )
             for key, default in defaults.items()

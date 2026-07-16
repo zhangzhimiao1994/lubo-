@@ -110,6 +110,7 @@ class FFmpegRecorder:
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
     def stop(self, process: subprocess.Popen, timeout: int = 10) -> None:

@@ -24,6 +24,7 @@ class AppConfig:
     split_enabled: bool = True
     split_seconds: int = 1800
     convert_to_mp4: bool = True
+    minimum_free_space_mb: int = 1024
     cookies: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -66,6 +67,15 @@ class ConfigService:
             convert_to_mp4=self._bool(
                 self._get(parser, "recorder", "convert_to_mp4", "true"), True
             ),
+            minimum_free_space_mb=self._non_negative_int(
+                self._get(
+                    parser,
+                    "recorder",
+                    "minimum_free_space_mb",
+                    "1024",
+                ),
+                1024,
+            ),
             cookies={
                 key: self._get(parser, "cookies", key, "") for key in PLATFORM_KEYS
             },
@@ -80,6 +90,7 @@ class ConfigService:
             "split_enabled": self._bool_text(config.split_enabled),
             "split_seconds": str(config.split_seconds),
             "convert_to_mp4": self._bool_text(config.convert_to_mp4),
+            "minimum_free_space_mb": str(config.minimum_free_space_mb),
         }
         parser["monitor"] = {
             "loop_seconds": str(config.loop_seconds),
@@ -135,6 +146,11 @@ class ConfigService:
             return int(value.strip())
         except (AttributeError, ValueError):
             return default
+
+    @classmethod
+    def _non_negative_int(cls, value: str, default: int) -> int:
+        parsed = cls._int(value, default)
+        return parsed if parsed >= 0 else default
 
     @staticmethod
     def _format(value: str) -> OutputFormat:

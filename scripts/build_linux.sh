@@ -186,5 +186,65 @@ if [[ ! -d "$DIST_PATH" ]]; then
     echo "Expected build output not found: $DIST_PATH" >&2
     exit 1
 fi
+DIST_PATH="$(realpath -e -- "$DIST_PATH")"
+
+PACKAGED_ROOTS=()
+if [[ -d "$DIST_PATH/_internal" ]]; then
+    PACKAGED_ROOTS+=("$(realpath -e -- "$DIST_PATH/_internal")")
+fi
+PACKAGED_ROOTS+=("$DIST_PATH")
+
+NATIVE_LIBRARY_DIRS=()
+for packaged_root in "${PACKAGED_ROOTS[@]}"; do
+    if [[ -d "$packaged_root/av.libs" ]]; then
+        NATIVE_LIBRARY_DIRS+=("$(realpath -e -- "$packaged_root/av.libs")")
+    fi
+    NATIVE_LIBRARY_DIRS+=("$packaged_root")
+done
+PACKAGED_LD_LIBRARY_PATH="$(IFS=:; printf '%s' "${NATIVE_LIBRARY_DIRS[*]}")"
+
+if ! LD_LIBRARY_PATH="${PACKAGED_LD_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+    "$BUILD_PYTHON" -I -S - "$DIST_PATH" "${PACKAGED_ROOTS[@]}" <<'PYAV_SMOKE'
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+dist_path = Path(sys.argv[1]).resolve()
+package_roots = [Path(value).resolve() for value in sys.argv[2:]]
+if not package_roots:
+    raise SystemExit("No packaged Python roots were found.")
+
+def require_packaged(path, label):
+    try:
+        Path(path).resolve().relative_to(dist_path)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"{label} is outside the packaged output: {path}") from error
+
+for package_root in package_roots:
+    require_packaged(package_root, "Packaged Python root")
+sys.path[:0] = [str(package_root) for package_root in package_roots]
+
+import av
+import av.audio.frame
+import av.container.core
+import av.video.frame
+
+packaged_modules = (av, av.audio.frame, av.container.core, av.video.frame)
+for module in packaged_modules:
+    module_file = getattr(module, "__file__", None)
+    if not module_file:
+        raise SystemExit(f"Packaged module has no file: {module.__name__}")
+    require_packaged(module_file, module.__name__)
+
+if not av.library_versions:
+    raise SystemExit("PyAV did not report linked FFmpeg library versions.")
+frame = av.VideoFrame(2, 2, "yuv420p")
+if (frame.width, frame.height) != (2, 2):
+    raise SystemExit("PyAV VideoFrame smoke test returned invalid dimensions.")
+PYAV_SMOKE
+then
+    echo "Packaged PyAV smoke test failed." >&2
+    exit 1
+fi
 
 printf 'Build complete: %s\n' "$DIST_PATH"

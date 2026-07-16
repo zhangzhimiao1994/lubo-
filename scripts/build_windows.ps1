@@ -330,6 +330,88 @@ try {
     if (-not (Test-Path -LiteralPath $DistPath -PathType Container)) {
         throw "Expected build output not found: $DistPath"
     }
+    $DistPath = (Resolve-Path -LiteralPath $DistPath).Path
+
+    $PackagedRoots = @()
+    $InternalPath = Join-Path $DistPath "_internal"
+    if (Test-Path -LiteralPath $InternalPath -PathType Container) {
+        $PackagedRoots += (Resolve-Path -LiteralPath $InternalPath).Path
+    }
+    $PackagedRoots += $DistPath
+
+    $NativeLibraryPaths = @()
+    foreach ($PackagedRoot in $PackagedRoots) {
+        $AvLibsPath = Join-Path $PackagedRoot "av.libs"
+        if (Test-Path -LiteralPath $AvLibsPath -PathType Container) {
+            $NativeLibraryPaths += (Resolve-Path -LiteralPath $AvLibsPath).Path
+        }
+        $NativeLibraryPaths += $PackagedRoot
+    }
+
+    $PyAvVerification = @'
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+dist_path = Path(sys.argv[1]).resolve()
+package_roots = [Path(value).resolve() for value in sys.argv[2:]]
+if not package_roots:
+    raise SystemExit("No packaged Python roots were found.")
+
+def require_packaged(path, label):
+    try:
+        Path(path).resolve().relative_to(dist_path)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"{label} is outside the packaged output: {path}") from error
+
+for package_root in package_roots:
+    require_packaged(package_root, "Packaged Python root")
+sys.path[:0] = [str(package_root) for package_root in package_roots]
+
+import av
+import av.audio.frame
+import av.container.core
+import av.video.frame
+
+packaged_modules = (av, av.audio.frame, av.container.core, av.video.frame)
+for module in packaged_modules:
+    module_file = getattr(module, "__file__", None)
+    if not module_file:
+        raise SystemExit(f"Packaged module has no file: {module.__name__}")
+    require_packaged(module_file, module.__name__)
+
+if not av.library_versions:
+    raise SystemExit("PyAV did not report linked FFmpeg library versions.")
+frame = av.VideoFrame(2, 2, "yuv420p")
+if (frame.width, frame.height) != (2, 2):
+    raise SystemExit("PyAV VideoFrame smoke test returned invalid dimensions.")
+'@
+    $PyAvVerificationPath = Join-Path $RepoRoot "build/pyav-packaged-smoke.py"
+    $Utf8WithoutBom = New-Object Text.UTF8Encoding($false)
+    [IO.File]::WriteAllText(
+        $PyAvVerificationPath,
+        $PyAvVerification,
+        $Utf8WithoutBom
+    )
+    $PreviousPath = $env:PATH
+    try {
+        $PathEntries = @($NativeLibraryPaths)
+        if ($PreviousPath) {
+            $PathEntries += $PreviousPath
+        }
+        $env:PATH = $PathEntries -join [IO.Path]::PathSeparator
+        & $BuildPython -I -S $PyAvVerificationPath $DistPath $PackagedRoots
+        $PyAvVerificationExitCode = $LASTEXITCODE
+    }
+    finally {
+        $env:PATH = $PreviousPath
+        if (Test-Path -LiteralPath $PyAvVerificationPath -PathType Leaf) {
+            Remove-Item -LiteralPath $PyAvVerificationPath -Force
+        }
+    }
+    if ($PyAvVerificationExitCode -ne 0) {
+        throw "Packaged PyAV smoke test failed with exit code $PyAvVerificationExitCode."
+    }
 
     Write-Host "Build complete: $DistPath"
 }

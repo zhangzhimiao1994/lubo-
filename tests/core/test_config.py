@@ -27,6 +27,7 @@ class ConfigServiceTests(unittest.TestCase):
                 "split_enabled = no\n"
                 "split_seconds = 900\n"
                 "convert_to_mp4 = 0\n"
+                "minimum_free_space_mb = 2048\n"
                 "[monitor]\n"
                 "loop_seconds = 60\n"
                 "max_concurrency = 2\n"
@@ -49,6 +50,7 @@ class ConfigServiceTests(unittest.TestCase):
             self.assertFalse(config.split_enabled)
             self.assertEqual(config.split_seconds, 900)
             self.assertFalse(config.convert_to_mp4)
+            self.assertEqual(config.minimum_free_space_mb, 2048)
             self.assertEqual(config.loop_seconds, 60)
             self.assertEqual(config.max_concurrency, 2)
             self.assertTrue(config.use_proxy)
@@ -115,6 +117,7 @@ class ConfigServiceTests(unittest.TestCase):
             self.assertTrue(config.split_enabled)
             self.assertEqual(config.split_seconds, 1800)
             self.assertTrue(config.convert_to_mp4)
+            self.assertEqual(config.minimum_free_space_mb, 1024)
             self.assertEqual(config.cookies, dict.fromkeys(PLATFORM_KEYS, ""))
             parser = configparser.ConfigParser()
             parser.read(path, encoding="utf-8-sig")
@@ -147,6 +150,7 @@ class ConfigServiceTests(unittest.TestCase):
                 split_enabled=False,
                 split_seconds=600,
                 convert_to_mp4=False,
+                minimum_free_space_mb=4096,
                 cookies={
                     "douyin": "dy",
                     "bilibili": "bili",
@@ -234,6 +238,7 @@ class ConfigServiceTests(unittest.TestCase):
                 "split_enabled = maybe\n"
                 "split_seconds = soon\n"
                 "convert_to_mp4 = perhaps\n"
+                "minimum_free_space_mb = unknown\n"
                 "[monitor]\n"
                 "loop_seconds = later\n"
                 "max_concurrency = many\n"
@@ -248,6 +253,7 @@ class ConfigServiceTests(unittest.TestCase):
             self.assertTrue(config.split_enabled)
             self.assertEqual(config.split_seconds, 1800)
             self.assertTrue(config.convert_to_mp4)
+            self.assertEqual(config.minimum_free_space_mb, 1024)
             self.assertEqual(config.loop_seconds, 300)
             self.assertEqual(config.max_concurrency, 3)
             self.assertFalse(config.use_proxy)

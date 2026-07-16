@@ -53,18 +53,21 @@ def run_service(root: Path | None = None) -> None:
     config_path, url_path, status_path = _service_paths(storage_root)
     config = ConfigService(config_path).load()
     targets = UrlStore(url_path, default_quality=config.quality).load()
+    output_dir = storage_root / "recordings"
+    output_dir.mkdir(parents=True, exist_ok=True)
     event_bus = EventBus()
     scheduler = RecordingScheduler(
         registry=build_default_registry(),
         recorder=DirectHttpRecorder(),
         event_bus=event_bus,
         config=SchedulerConfig(
-            output_dir=storage_root / "recordings",
+            output_dir=output_dir,
             quality=config.quality,
             proxy_addr=config.proxy_addr if config.use_proxy else "",
             cookies=dict(config.cookies),
             split_enabled=False,
             max_concurrency=min(config.max_concurrency, 2),
+            minimum_free_space_mb=config.minimum_free_space_mb,
         ),
     )
 

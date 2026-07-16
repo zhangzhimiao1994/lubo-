@@ -1,6 +1,6 @@
 [project]
 name = "lubo-live-recorder"
-version = "0.2.0a1"
+version = "0.2.0a3"
 description = "独立的多平台直播录制应用"
 readme = "README.md"
 authors = [{name = "zhangzhimiao1994"}]
@@ -15,6 +15,7 @@ dependencies = [
 gui = [
     "kivy>=2.3.0",
     "pyinstaller>=6.0.0",
+    "av==17.0.1",
 ]
 
 [project.urls]

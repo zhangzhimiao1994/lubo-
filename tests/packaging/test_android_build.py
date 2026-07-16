@@ -11,7 +11,7 @@ from lubo.apps.android.platform import STOP_REQUEST_FILE
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LEGACY_ANDROID_REQUIREMENTS = {"distro", "loguru", "pyexecjs"}
+FORBIDDEN_ANDROID_REQUIREMENTS = {"av", "distro", "loguru", "pyexecjs"}
 FORBIDDEN_ANDROID_IMPORTS = {"_multiprocessing", "multiprocessing", "src"}
 
 
@@ -62,7 +62,7 @@ class AndroidBuildContractTests(unittest.TestCase):
             app["android.service_class_name"],
             "org.lubo.recorder.RecorderPythonService",
         )
-        self.assertEqual(app["version"], "0.2.0a1")
+        self.assertEqual(app["version"], "0.2.0a3")
         self.assertEqual(
             app["requirements"],
             "python3,kivy==2.3.1,pyjnius,android,streamlink==8.4.0,yt-dlp==2026.6.9",
@@ -76,7 +76,7 @@ class AndroidBuildContractTests(unittest.TestCase):
             for requirement in parser["app"]["requirements"].split(",")
         }
 
-        self.assertTrue(LEGACY_ANDROID_REQUIREMENTS.isdisjoint(requirement_names))
+        self.assertTrue(FORBIDDEN_ANDROID_REQUIREMENTS.isdisjoint(requirement_names))
 
     def test_packaged_python_sources_do_not_import_legacy_or_multiprocessing_modules(self):
         packaged_sources = [
@@ -114,7 +114,7 @@ class AndroidBuildContractTests(unittest.TestCase):
             and isinstance(node.value.value, str)
         )
 
-        self.assertEqual(distribution_version, "0.2.0a1")
+        self.assertEqual(distribution_version, "0.2.0a3")
         self.assertEqual(buildozer_version, distribution_version)
         self.assertEqual(entrypoint_version, distribution_version)
 
@@ -133,7 +133,7 @@ class AndroidBuildContractTests(unittest.TestCase):
         numeric_version_text = app["android.numeric_version"]
         self.assertRegex(numeric_version_text, r"^[1-9][0-9]*$")
         numeric_version = int(numeric_version_text)
-        self.assertEqual(numeric_version, 20001)
+        self.assertEqual(numeric_version, 20003)
         self.assertGreaterEqual(numeric_version, 1)
         self.assertLessEqual(numeric_version, 2_100_000_000)
         self.assertNotEqual(numeric_version_text, display_version)

@@ -15,6 +15,7 @@ venv/
 htmlcov/
 coverage.xml
 .hypothesis/
+.superpowers/
 
 # Distribution and packaging
 build/

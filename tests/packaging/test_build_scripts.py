@@ -1,5 +1,8 @@
+import ast
 import configparser
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -292,6 +295,237 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn("kivy.core.image.img_sdl2", hook)
         self.assertIn("kivy.core.clipboard.clipboard_winctypes", hook)
 
+    def test_desktop_build_collects_and_verifies_pyav_native_binaries(self):
+        hook_path = REPO_ROOT / "packaging" / "pyinstaller-hooks" / "hook-av.py"
+
+        self.assertTrue(hook_path.is_file(), "A project PyAV hook must be present")
+        hook = hook_path.read_text(encoding="utf-8")
+        hook_tree = ast.parse(hook, filename=str(hook_path))
+        imported_helpers = {
+            alias.name
+            for node in hook_tree.body
+            if isinstance(node, ast.ImportFrom)
+            and node.module == "PyInstaller.utils.hooks"
+            for alias in node.names
+        }
+        self.assertTrue(
+            {
+                "collect_delvewheel_libs_directory",
+                "collect_dynamic_libs",
+                "collect_submodules",
+            }.issubset(imported_helpers)
+        )
+
+        calls = []
+
+        def collect_submodules(package):
+            calls.append(("collect_submodules", package))
+            return ["av.video.frame", "fractions", "av.video.frame"]
+
+        def collect_dynamic_libs(package, **kwargs):
+            calls.append(("collect_dynamic_libs", package, kwargs))
+            return [("inside-av", "av")]
+
+        def collect_delvewheel_libs_directory(package, **kwargs):
+            calls.append(("collect_delvewheel_libs_directory", package, kwargs))
+            return [("load-order", "av.libs")], [
+                *kwargs["binaries"],
+                ("avcodec.dll", "av.libs"),
+            ]
+
+        executable_tree = ast.Module(
+            body=[
+                node
+                for node in hook_tree.body
+                if not isinstance(node, (ast.Import, ast.ImportFrom))
+            ],
+            type_ignores=[],
+        )
+        namespace = {
+            "collect_delvewheel_libs_directory": collect_delvewheel_libs_directory,
+            "collect_dynamic_libs": collect_dynamic_libs,
+            "collect_submodules": collect_submodules,
+        }
+        exec(compile(executable_tree, str(hook_path), "exec"), namespace)
+
+        self.assertEqual(
+            namespace["hiddenimports"],
+            ["fractions", "dataclasses", "uuid", "av.video.frame"],
+        )
+        self.assertEqual(
+            len(namespace["hiddenimports"]),
+            len(set(namespace["hiddenimports"])),
+        )
+        self.assertEqual(namespace["module_collection_mode"], {"av": "pyz+py"})
+        self.assertEqual(
+            namespace["binaries"],
+            [("inside-av", "av"), ("avcodec.dll", "av.libs")],
+        )
+        self.assertEqual(namespace["datas"], [("load-order", "av.libs")])
+        self.assertIn(("collect_submodules", "av"), calls)
+
+        for script in (self.windows_script, self.linux_script):
+            self.assertIn('--additional-hooks-dir "packaging/pyinstaller-hooks"', script)
+
+    def test_desktop_build_smokes_packaged_pyav_without_venv_fallback(self):
+        windows_match = re.search(
+            r"\$PyAvVerification\s*=\s*@'\n(?P<source>.*?)\n'@",
+            self.windows_script,
+            flags=re.DOTALL,
+        )
+        linux_match = re.search(
+            r"<<'PYAV_SMOKE'\n(?P<source>.*?)\nPYAV_SMOKE",
+            self.linux_script,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(windows_match)
+        self.assertIsNotNone(linux_match)
+        smoke_sources = (windows_match["source"], linux_match["source"])
+
+        for source in smoke_sources:
+            tree = ast.parse(source)
+            imported_modules = {
+                alias.name
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Import)
+                for alias in node.names
+            }
+            referenced_attributes = {
+                node.attr for node in ast.walk(tree) if isinstance(node, ast.Attribute)
+            }
+            self.assertTrue(
+                {
+                    "av",
+                    "av.audio.frame",
+                    "av.container.core",
+                    "av.video.frame",
+                }.issubset(imported_modules)
+            )
+            self.assertIn("library_versions", referenced_attributes)
+            self.assertIn("VideoFrame", referenced_attributes)
+
+        self.assertRegex(
+            self.windows_script,
+            r'&\s+\$BuildPython\s+-I\s+-S\s+\$PyAvVerificationPath',
+        )
+        self.assertIn("[IO.File]::WriteAllText", self.windows_script)
+        self.assertIn(
+            "Remove-Item -LiteralPath $PyAvVerificationPath",
+            self.windows_script,
+        )
+        self.assertNotRegex(
+            self.windows_script,
+            r'&\s+\$BuildPython\s+-I\s+-S\s+-c\s+\$PyAvVerification',
+        )
+        self.assertIn("$env:PATH", self.windows_script)
+        self.assertIn("av.libs", self.windows_script)
+        self.assertRegex(self.linux_script, r'"\$BUILD_PYTHON"\s+-I\s+-S\s+-')
+        self.assertIn("LD_LIBRARY_PATH", self.linux_script)
+        self.assertIn("av.libs", self.linux_script)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            dist_path = Path(tmp) / "dist" / "Lubo"
+            internal_path = dist_path / "_internal"
+            av_path = internal_path / "av"
+            for package_path in (
+                av_path,
+                av_path / "audio",
+                av_path / "container",
+                av_path / "video",
+            ):
+                package_path.mkdir(parents=True, exist_ok=True)
+                (package_path / "__init__.py").write_text("", encoding="utf-8")
+            (av_path / "__init__.py").write_text(
+                "library_versions = {'libavcodec': (1, 2, 3)}\n"
+                "class VideoFrame:\n"
+                "    def __init__(self, width, height, format):\n"
+                "        self.width = width\n"
+                "        self.height = height\n"
+                "        self.format = format\n",
+                encoding="utf-8",
+            )
+            for module_path in (
+                av_path / "audio" / "frame.py",
+                av_path / "container" / "core.py",
+                av_path / "video" / "frame.py",
+            ):
+                module_path.write_text("PACKAGED = True\n", encoding="utf-8")
+
+            for source in smoke_sources:
+                packaged = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-c",
+                        source,
+                        str(dist_path),
+                        str(internal_path),
+                        str(dist_path),
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(packaged.returncode, 0, packaged.stderr)
+                self.assertEqual(list(dist_path.rglob("__pycache__")), [])
+
+                outside_root = Path(tmp) / "build-venv" / "site-packages"
+                outside_root.mkdir(parents=True, exist_ok=True)
+                rejected = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-c",
+                        source,
+                        str(dist_path),
+                        str(outside_root),
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(rejected.returncode, 0)
+
+                fallback_av_path = outside_root / "av"
+                shutil.copytree(av_path, fallback_av_path)
+                packaged_av_path = internal_path / "av.packaged"
+                av_path.rename(packaged_av_path)
+                try:
+                    fallback = subprocess.run(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-c",
+                            source,
+                            str(dist_path),
+                            str(internal_path),
+                            str(dist_path),
+                        ],
+                        env={**os.environ, "PYTHONPATH": str(outside_root)},
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    )
+                finally:
+                    packaged_av_path.rename(av_path)
+                    shutil.rmtree(fallback_av_path)
+                self.assertNotEqual(fallback.returncode, 0)
+
+    def test_desktop_gui_dependencies_pin_pyav(self):
+        requirements = (
+            REPO_ROOT / "requirements-gui.txt"
+        ).read_text(encoding="utf-8").splitlines()
+        with (REPO_ROOT / "pyproject.toml").open("rb") as metadata_file:
+            gui_dependencies = tomllib.load(metadata_file)["project"][
+                "optional-dependencies"
+            ]["gui"]
+
+        self.assertEqual(requirements.count("av==17.0.1"), 1)
+        self.assertEqual(gui_dependencies.count("av==17.0.1"), 1)
+
     def test_desktop_build_keeps_kivy_from_amplifying_pyinstaller_logs(self):
         self.assertIn('$env:KIVY_LOG_MODE = "PYTHON"', self.windows_script)
         self.assertIn('$env:KIVY_NO_FILELOG = "1"', self.windows_script)
@@ -407,7 +641,8 @@ class BuildScriptContractTests(unittest.TestCase):
 
     def test_desktop_builds_and_entrypoint_use_lubo_name(self):
         self.assertIn("class LuboDesktopApp(App):", self.desktop_app)
-        self.assertIn("LuboDesktopApp().run()", self.desktop_app)
+        self.assertIn("app = LuboDesktopApp()", self.desktop_app)
+        self.assertIn("app.run()", self.desktop_app)
         for script in (self.windows_script, self.linux_script):
             self.assertIn("--name Lubo", script)
             self.assertIn("dist/Lubo", script)
@@ -439,9 +674,62 @@ class BuildScriptContractTests(unittest.TestCase):
         self.assertIn('release/Lubo-$RELEASE_TAG-windows.zip', workflow)
         self.assertIn('release/Lubo-$RELEASE_TAG-linux.zip', workflow)
         self.assertIn('release/Lubo-$RELEASE_TAG-android-debug.apk', workflow)
+        self.assertIn('release/Lubo-$RELEASE_TAG-SHA256SUMS.txt', workflow)
+        self.assertIn("sha256sum", workflow)
         self.assertIn('--title "Lubo $RELEASE_TAG"', workflow)
+        self.assertIn("--notes-file release-notes.md", workflow)
         self.assertIn("gh release create", workflow)
+        self.assertIn("gh release edit", workflow)
         self.assertIn("gh release upload", workflow)
+        trigger = workflow.split("workflow_run:", 1)[1].split("permissions:", 1)[0]
+        self.assertIn("Build Desktop Apps", trigger)
+        self.assertIn("Build Android APK", trigger)
+        self.assertIn('echo "ready=false" >>"$GITHUB_OUTPUT"', workflow)
+        self.assertIn('echo "ready=true" >>"$GITHUB_OUTPUT"', workflow)
+        self.assertIn("concurrency:", workflow)
+        self.assertIn("publish-release-${{", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("No release tag points at workflow run", workflow)
+        self.assertGreaterEqual(
+            workflow.count("if: steps.release.outputs.ready == 'true'"),
+            4,
+        )
+        self.assertNotIn("for attempt", workflow)
+        self.assertNotIn("sleep 15", workflow)
+
+    def test_release_workflow_generates_build_and_change_details(self):
+        workflow = (
+            REPO_ROOT / ".github" / "workflows" / "publish-release.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("git rev-list -n 1", workflow)
+        self.assertIn("git describe --tags --abbrev=0", workflow)
+        self.assertIn("git log --pretty", workflow)
+        self.assertIn("requirements.txt", workflow)
+        self.assertIn("Windows desktop", workflow)
+        self.assertIn("Linux desktop", workflow)
+        self.assertIn("Android debug APK", workflow)
+        self.assertNotIn("--notes \"", workflow)
+
+    def test_release_workflow_keeps_hyphenated_tags_as_prereleases(self):
+        workflow = (
+            REPO_ROOT / ".github" / "workflows" / "publish-release.yml"
+        ).read_text(encoding="utf-8")
+        publish_step = workflow.split("- name: Create or update GitHub Release", 1)[1]
+
+        prerelease_setup = publish_step.index("prerelease=()")
+        release_lookup = publish_step.index("if gh release view")
+        self.assertLess(prerelease_setup, release_lookup)
+        self.assertIn('[[ "$RELEASE_TAG" == *-* ]]', publish_step)
+        self.assertIn("prerelease=(--prerelease --latest=false)", publish_step)
+        edit_command = publish_step.split("gh release edit", 1)[1].split(
+            "gh release upload", 1
+        )[0]
+        create_command = publish_step.split("gh release create", 1)[1].split(
+            "\n          fi", 1
+        )[0]
+        self.assertIn('"${prerelease[@]}"', edit_command)
+        self.assertIn('"${prerelease[@]}"', create_command)
 
     def test_android_app_and_entrypoint_use_lubo_class_and_title(self):
         self.assertIn("class LuboAndroidApp(App):", self.android_app)
@@ -604,13 +892,46 @@ class BuildScriptContractTests(unittest.TestCase):
             github_urls,
         )
 
+    def test_readme_documents_desktop_preview_and_alpha_release_assets(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        for statement in (
+            "预览仅支持 Windows 和 Linux",
+            "同时只能预览一个直播间",
+            "默认静音",
+            "独立连接",
+            "不影响录制",
+            "PyAV",
+            "FFmpeg",
+            "Android 暂不支持预览",
+            "v0.2.0-alpha.3",
+            "Lubo-v0.2.0-alpha.3-windows.zip",
+            "Lubo-v0.2.0-alpha.3-linux.zip",
+            "Lubo-v0.2.0-alpha.3-android-debug.apk",
+            "Lubo-v0.2.0-alpha.3-SHA256SUMS.txt",
+            "SHA-256",
+        ):
+            self.assertIn(statement, readme)
+
+    def test_readme_documents_persistent_desktop_target_controls(self):
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+        for statement in (
+            "停止并暂停会持久化禁用该目标",
+            "停止当前录制",
+            "后续值守不会自动重启",
+            "恢复会重新启用目标",
+            "下一轮值守处理",
+        ):
+            self.assertIn(statement, readme)
+
     def test_pyproject_declares_exact_distribution_metadata(self):
         with (REPO_ROOT / "pyproject.toml").open("rb") as metadata_file:
             metadata = tomllib.load(metadata_file)
 
         project = metadata["project"]
         self.assertEqual(project["name"], "lubo-live-recorder")
-        self.assertEqual(project["version"], "0.2.0a1")
+        self.assertEqual(project["version"], "0.2.0a3")
         self.assertIn("独立", project["description"])
         self.assertIn("多平台", project["description"])
         self.assertEqual(project["authors"], [{"name": "zhangzhimiao1994"}])
@@ -627,7 +948,7 @@ class BuildScriptContractTests(unittest.TestCase):
         )
         self.assertEqual(
             project["optional-dependencies"]["gui"],
-            ["kivy>=2.3.0", "pyinstaller>=6.0.0"],
+            ["kivy>=2.3.0", "pyinstaller>=6.0.0", "av==17.0.1"],
         )
         self.assertEqual(
             project["urls"],
@@ -748,12 +1069,13 @@ class BuildScriptContractTests(unittest.TestCase):
                 "quality = high\n"
                 "split_enabled = false\n"
                 "split_seconds = 600\n"
+                "minimum_free_space_mb = 2048\n"
                 "[monitor]\n"
                 "loop_seconds = 45\n"
                 "max_concurrency = 5\n"
                 "[proxy]\n"
                 "enabled = true\n"
-                "address = proxy.example:8080\n"
+                "address = http://alice:proxy-secret@proxy.example:8080\n"
                 "[cookies]\n"
                 "douyin = dy-secret\n"
                 "bilibili = bili-secret\n"
@@ -799,6 +1121,7 @@ class BuildScriptContractTests(unittest.TestCase):
                     "split_enabled",
                     "split_seconds",
                     "convert_to_mp4",
+                    "minimum_free_space_mb",
                 },
             )
             self.assertEqual(set(parser["monitor"]), {"loop_seconds", "max_concurrency"})
@@ -808,10 +1131,12 @@ class BuildScriptContractTests(unittest.TestCase):
             self.assertEqual(parser["recorder"]["output_format"], "mkv")
             self.assertEqual(parser["recorder"]["quality"], "high")
             self.assertEqual(parser["recorder"]["convert_to_mp4"], "true")
+            self.assertEqual(parser["recorder"]["minimum_free_space_mb"], "2048")
             self.assertEqual(parser["monitor"]["loop_seconds"], "45")
-            self.assertEqual(parser["proxy"]["address"], "proxy.example:8080")
+            self.assertEqual(parser["proxy"]["enabled"], "false")
+            self.assertEqual(parser["proxy"]["address"], "")
             self.assertTrue(all(value == "" for value in parser["cookies"].values()))
-            for marker in ("SECRET", "TOKEN", "PASSWORD"):
+            for marker in ("SECRET", "TOKEN", "PASSWORD", "proxy-secret"):
                 self.assertNotIn(marker, packaged_text)
 
     def test_packaged_config_sanitizer_rejects_missing_source(self):
